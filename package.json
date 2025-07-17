@@ -40,7 +40,8 @@
       "main.js",
       "preload.js",
       "backend/**/*",
-      "frontend/dist/**/*"
+      "frontend/dist/**/*",
+      "assets/**/*"
     ],
     "directories": {
       "buildResources": "assets",
