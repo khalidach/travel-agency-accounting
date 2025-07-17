@@ -152,6 +152,7 @@ const createWindow = () => {
   const mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    icon: path.join(__dirname, "assets/icon.png"), // <-- ADD THIS LINE
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
@@ -169,10 +170,8 @@ const createWindow = () => {
 
 app.whenReady().then(createWindow);
 app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    db.close();
-    app.quit();
-  }
+  db.close();
+  app.quit();
 });
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
