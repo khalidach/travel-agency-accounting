@@ -27,6 +27,7 @@ export interface Payment {
   amount: number;
   date: Date;
   createdAt: Date;
+  transaction_id: number; // Link to the transaction table
 }
 
 export interface Credit {
@@ -42,6 +43,8 @@ export interface Credit {
   payments: Payment[]; // Array of payments
   totalPaid: number; // Calculated field from the backend
   remainingBalance: number; // Calculated field from the backend
+  includeInTotals: boolean; // Whether to include in dashboard/reports
+  transaction_id?: number; // Link to the initial transaction
 }
 
 export interface DateRange {

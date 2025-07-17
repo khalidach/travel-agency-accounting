@@ -86,8 +86,15 @@ const electronAPI = {
     const updatedCredit = await window.electronAPI.updateCredit(creditData);
     return parseCreditDates(updatedCredit);
   },
-  deleteCredit: (id: number): Promise<void> =>
+  deleteCredit: (id: number): Promise<{ success: true }> =>
     window.electronAPI.deleteCredit(id),
+  toggleCreditInclusion: async (data: {
+    credit_id: number;
+    include: boolean;
+  }): Promise<Credit> => {
+    const updatedCredit = await window.electronAPI.toggleCreditInclusion(data);
+    return parseCreditDates(updatedCredit);
+  },
 
   // Payments
   addPayment: async (paymentData: {
@@ -100,10 +107,12 @@ const electronAPI = {
   },
   deletePayment: async (paymentData: {
     payment_id: number;
-    credit_id: number;
-  }): Promise<Credit> => {
+  }): Promise<Credit | null> => {
     const updatedCredit = await window.electronAPI.deletePayment(paymentData);
-    return parseCreditDates(updatedCredit);
+    if (updatedCredit) {
+      return parseCreditDates(updatedCredit);
+    }
+    return null;
   },
 };
 

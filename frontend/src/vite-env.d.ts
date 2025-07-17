@@ -16,7 +16,11 @@ interface ElectronAPI {
   getCredits: () => Promise<any[]>;
   addCredit: (credit: any) => Promise<any>;
   updateCredit: (credit: any) => Promise<any>;
-  deleteCredit: (id: number) => Promise<void>;
+  deleteCredit: (id: number) => Promise<{ success: true }>;
+  toggleCreditInclusion: (data: {
+    credit_id: number;
+    include: boolean;
+  }) => Promise<any>;
 
   // Payments
   addPayment: (paymentData: {
@@ -24,10 +28,7 @@ interface ElectronAPI {
     amount: number;
     date: string;
   }) => Promise<any>;
-  deletePayment: (paymentData: {
-    payment_id: number;
-    credit_id: number;
-  }) => Promise<any>;
+  deletePayment: (paymentData: { payment_id: number }) => Promise<any>;
 }
 
 interface Window {

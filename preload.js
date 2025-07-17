@@ -23,6 +23,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
   addCredit: (credit) => ipcRenderer.invoke("add-credit", credit),
   updateCredit: (credit) => ipcRenderer.invoke("update-credit", credit),
   deleteCredit: (id) => ipcRenderer.invoke("delete-credit", id),
+  toggleCreditInclusion: (data) =>
+    ipcRenderer.invoke("toggle-credit-inclusion", data),
 
   // Payments
   addPayment: (paymentData) => ipcRenderer.invoke("add-payment", paymentData),

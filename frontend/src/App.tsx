@@ -136,7 +136,7 @@ function App() {
   const deleteCredit = async (id: number) => {
     try {
       await api.deleteCredit(id);
-      setCredits((prev) => prev.filter((c) => c.id !== id));
+      fetchData();
     } catch (err) {
       console.error("Failed to delete credit", err);
       setError("Failed to delete credit.");
@@ -154,25 +154,42 @@ function App() {
         prev.map((c) => (c.id === updatedCredit.id ? updatedCredit : c))
       );
       // Also refetch transactions to show the new payment transaction
-      const transactionsData = await api.getTransactions();
-      setTransactions(transactionsData);
+      fetchData();
     } catch (err) {
       console.error("Failed to add payment", err);
       setError("Failed to add payment.");
     }
   };
 
-  const deletePayment = async (payment_id: number, credit_id: number) => {
+  const deletePayment = async (payment_id: number) => {
     try {
-      const updatedCredit = await api.deletePayment({ payment_id, credit_id });
-      setCredits((prev) =>
-        prev.map((c) => (c.id === updatedCredit.id ? updatedCredit : c))
-      );
+      const updatedCredit = await api.deletePayment({ payment_id });
+      if (updatedCredit) {
+        setCredits((prev) =>
+          prev.map((c) => (c.id === updatedCredit.id ? updatedCredit : c))
+        );
+      }
       // Refetch transactions as a payment-related transaction was likely deleted
       fetchData();
     } catch (err) {
       console.error("Failed to delete payment", err);
       setError("Failed to delete payment.");
+    }
+  };
+
+  const handleToggleInclusion = async (credit_id: number, include: boolean) => {
+    try {
+      const updatedCredit = await api.toggleCreditInclusion({
+        credit_id,
+        include,
+      });
+      setCredits((prev) =>
+        prev.map((c) => (c.id === credit_id ? updatedCredit : c))
+      );
+      fetchData(); // Refetch all data to update transactions
+    } catch (err) {
+      console.error("Failed to toggle credit inclusion", err);
+      setError("Failed to toggle credit inclusion.");
     }
   };
 
@@ -183,9 +200,35 @@ function App() {
     if (error) {
       return <div className="text-center p-8 text-red-500">{error}</div>;
     }
+
+    // Filter transactions for dashboard and reports
+    const includedTransactionIds = new Set();
+    credits.forEach((c) => {
+      if (c.includeInTotals) {
+        if (c.transaction_id) includedTransactionIds.add(c.transaction_id);
+        c.payments.forEach((p) => {
+          if (p.transaction_id) includedTransactionIds.add(p.transaction_id);
+        });
+      }
+    });
+
+    const nonCreditTransactions = transactions.filter((t) => {
+      const isCreditTransaction = credits.some(
+        (c) =>
+          c.transaction_id === t.id ||
+          c.payments.some((p) => p.transaction_id === t.id)
+      );
+      return !isCreditTransaction;
+    });
+
+    const visibleTransactions = [
+      ...nonCreditTransactions,
+      ...transactions.filter((t) => includedTransactionIds.has(t.id)),
+    ];
+
     switch (activeTab) {
       case "dashboard":
-        return <Dashboard transactions={transactions} />;
+        return <Dashboard transactions={visibleTransactions} />;
       case "income":
         return (
           <IncomeManagement
@@ -212,6 +255,7 @@ function App() {
             onDeleteCredit={deleteCredit}
             onAddPayment={addPayment}
             onDeletePayment={deletePayment}
+            onToggleInclusion={handleToggleInclusion}
           />
         );
       case "categories":
@@ -223,9 +267,11 @@ function App() {
           />
         );
       case "reports":
-        return <Reports transactions={transactions} categories={categories} />;
+        return (
+          <Reports transactions={visibleTransactions} categories={categories} />
+        );
       default:
-        return <Dashboard transactions={transactions} />;
+        return <Dashboard transactions={visibleTransactions} />;
     }
   };
 

@@ -33,12 +33,13 @@ const CreditForm: React.FC<CreditFormProps> = ({
     description: "",
     date: new Date().toISOString().split("T")[0],
     dueDate: "",
+    includeInTotals: true,
   });
 
   const isEditing = !!creditToEdit;
 
   useEffect(() => {
-    if (isEditing) {
+    if (isEditing && creditToEdit) {
       setFormData({
         personName: creditToEdit.personName,
         type: creditToEdit.type,
@@ -48,6 +49,7 @@ const CreditForm: React.FC<CreditFormProps> = ({
         dueDate: creditToEdit.dueDate
           ? new Date(creditToEdit.dueDate).toISOString().split("T")[0]
           : "",
+        includeInTotals: creditToEdit.includeInTotals,
       });
     }
   }, [creditToEdit, isEditing]);
@@ -60,13 +62,14 @@ const CreditForm: React.FC<CreditFormProps> = ({
     }
 
     const submissionData = {
-      ...creditToEdit, // a new credit won't have this, an existing one will carry over its properties
+      ...creditToEdit,
       personName: formData.personName,
       type: formData.type,
       amount: parseFloat(formData.amount),
       description: formData.description,
       date: new Date(formData.date),
       dueDate: formData.dueDate ? new Date(formData.dueDate) : undefined,
+      includeInTotals: formData.includeInTotals,
     };
 
     onSubmit(submissionData, isEditing);
@@ -144,7 +147,24 @@ const CreditForm: React.FC<CreditFormProps> = ({
             }
             className="w-full p-2 border rounded"
           />
-          <div className="flex justify-end gap-4">
+          <div className="flex items-center">
+            <input
+              type="checkbox"
+              id="includeInTotals"
+              checked={formData.includeInTotals}
+              onChange={(e) =>
+                setFormData({ ...formData, includeInTotals: e.target.checked })
+              }
+              className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+            />
+            <label
+              htmlFor="includeInTotals"
+              className="ml-2 block text-sm text-gray-900"
+            >
+              Include in Dashboard & Report Totals
+            </label>
+          </div>
+          <div className="flex justify-end gap-4 pt-2">
             <button
               type="button"
               onClick={onClose}

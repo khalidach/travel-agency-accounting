@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { Credit } from "../types";
-import { Plus, Trash2, Edit, MoreVertical, X } from "lucide-react";
+import { Plus, Trash2, Edit } from "lucide-react";
 import { format } from "date-fns";
 import { formatCurrency } from "../utils/calculations";
 import CreditForm from "./CreditForm";
@@ -29,7 +29,8 @@ interface CreditManagementProps {
     amount: number;
     date: string;
   }) => void;
-  onDeletePayment: (payment_id: number, credit_id: number) => void;
+  onDeletePayment: (payment_id: number) => void;
+  onToggleInclusion: (credit_id: number, include: boolean) => void;
 }
 
 const CreditManagement: React.FC<CreditManagementProps> = ({
@@ -38,6 +39,7 @@ const CreditManagement: React.FC<CreditManagementProps> = ({
   onDeleteCredit,
   onAddPayment,
   onDeletePayment,
+  onToggleInclusion,
 }) => {
   const [showCreditForm, setShowCreditForm] = useState(false);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
@@ -127,6 +129,23 @@ const CreditManagement: React.FC<CreditManagementProps> = ({
                         {formatCurrency(credit.remainingBalance)}
                       </span>
                     </p>
+                  </div>
+                  <div className="flex items-center mt-2">
+                    <input
+                      type="checkbox"
+                      id={`include-${credit.id}`}
+                      checked={credit.includeInTotals}
+                      onChange={(e) =>
+                        onToggleInclusion(credit.id, e.target.checked)
+                      }
+                      className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                    />
+                    <label
+                      htmlFor={`include-${credit.id}`}
+                      className="ml-2 block text-sm text-gray-900"
+                    >
+                      Include in Totals
+                    </label>
                   </div>
                 </div>
                 <div className="text-right">

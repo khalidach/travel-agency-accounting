@@ -16,65 +16,30 @@ const db = new Database(dbPath);
 console.log("Database initialized at:", dbPath);
 
 // --- Database Migration ---
-// This section ensures the database schema is up-to-date.
 try {
   console.log("Running database migrations...");
-  db.exec("PRAGMA foreign_keys = ON;"); // Enable foreign key support
+  db.exec("PRAGMA foreign_keys = ON;");
 
-  // Get current columns for the transactions table
-  const transactionColumns = db
-    .prepare("PRAGMA table_info(transactions)")
-    .all();
-  const transactionColumnNames = transactionColumns.map((col) => col.name);
-
-  // Add new columns if they don't exist
-  if (!transactionColumnNames.includes("paymentMethod")) {
-    db.exec(
-      "ALTER TABLE transactions ADD COLUMN paymentMethod TEXT NOT NULL DEFAULT 'cash'"
-    );
-    console.log("Added 'paymentMethod' column to transactions table.");
-  }
-  if (!transactionColumnNames.includes("checkNumber")) {
-    db.exec("ALTER TABLE transactions ADD COLUMN checkNumber TEXT");
-    console.log("Added 'checkNumber' column to transactions table.");
-  }
-  if (!transactionColumnNames.includes("cashedDate")) {
-    db.exec("ALTER TABLE transactions ADD COLUMN cashedDate TEXT");
-    console.log("Added 'cashedDate' column to transactions table.");
-  }
-  if (!transactionColumnNames.includes("status")) {
-    db.exec(
-      "ALTER TABLE transactions ADD COLUMN status TEXT NOT NULL DEFAULT 'cashed'"
-    );
-    console.log("Added 'status' column to transactions table.");
-  }
-
-  // Migration for Credits table - remove status
+  // --- Schema for 'credits' table ---
   const creditColumns = db.prepare("PRAGMA table_info(credits)").all();
   const creditColumnNames = creditColumns.map((col) => col.name);
-  if (creditColumnNames.includes("status")) {
-    // SQLite doesn't support dropping columns directly in older versions.
-    // The common workaround is to rename the table, create a new one, and copy data.
-    console.log("Migrating 'credits' table: removing 'status' column.");
-    db.exec("ALTER TABLE credits RENAME TO credits_old;");
-    db.exec(`
-      CREATE TABLE IF NOT EXISTS credits (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        personName TEXT NOT NULL,
-        type TEXT NOT NULL,
-        amount REAL NOT NULL,
-        description TEXT,
-        date TEXT NOT NULL,
-        dueDate TEXT,
-        createdAt TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime'))
-      );
-    `);
-    db.exec(`
-      INSERT INTO credits (id, personName, type, amount, description, date, dueDate, createdAt)
-      SELECT id, personName, type, amount, description, date, dueDate, createdAt FROM credits_old;
-    `);
-    db.exec("DROP TABLE credits_old;");
-    console.log("'credits' table migrated successfully.");
+  if (!creditColumnNames.includes("transaction_id")) {
+    db.exec("ALTER TABLE credits ADD COLUMN transaction_id INTEGER");
+    console.log("Added 'transaction_id' column to credits table.");
+  }
+  if (!creditColumnNames.includes("includeInTotals")) {
+    db.exec(
+      "ALTER TABLE credits ADD COLUMN includeInTotals INTEGER NOT NULL DEFAULT 1"
+    );
+    console.log("Added 'includeInTotals' column to credits table.");
+  }
+
+  // --- Schema for 'payments' table ---
+  const paymentColumns = db.prepare("PRAGMA table_info(payments)").all();
+  const paymentColumnNames = paymentColumns.map((col) => col.name);
+  if (!paymentColumnNames.includes("transaction_id")) {
+    db.exec("ALTER TABLE payments ADD COLUMN transaction_id INTEGER");
+    console.log("Added 'transaction_id' column to payments table.");
   }
 
   console.log("Database migration check complete.");
@@ -83,7 +48,6 @@ try {
 }
 
 // --- Database Schema Setup ---
-// These CREATE statements will only run if the tables do not already exist.
 db.exec(`
   CREATE TABLE IF NOT EXISTS transactions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -120,7 +84,10 @@ db.exec(`
     description TEXT,
     date TEXT NOT NULL,
     dueDate TEXT,
-    createdAt TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime'))
+    createdAt TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime')),
+    transaction_id INTEGER,
+    includeInTotals INTEGER NOT NULL DEFAULT 1,
+    FOREIGN KEY (transaction_id) REFERENCES transactions (id) ON DELETE SET NULL
   );
 `);
 
@@ -131,12 +98,56 @@ db.exec(`
     amount REAL NOT NULL,
     date TEXT NOT NULL,
     createdAt TEXT DEFAULT (strftime('%Y-%m-%d %H:%M:%S', 'now', 'localtime')),
-    FOREIGN KEY (credit_id) REFERENCES credits (id) ON DELETE CASCADE
+    transaction_id INTEGER,
+    FOREIGN KEY (credit_id) REFERENCES credits (id) ON DELETE CASCADE,
+    FOREIGN KEY (transaction_id) REFERENCES transactions (id) ON DELETE SET NULL
   );
 `);
 
 console.log("Database tables checked/created.");
 
+// --- Helper Functions ---
+const createTransaction = (type, amount, description, date) => {
+  const stmt = db.prepare(
+    `INSERT INTO transactions (type, amount, description, date, paymentMethod, status)
+     VALUES (?, ?, ?, ?, 'cash', 'cashed')`
+  );
+  const result = stmt.run(type, amount, description, date);
+  return result.lastInsertRowid;
+};
+
+const deleteTransactionHelper = (id) => {
+  if (id) {
+    db.prepare("DELETE FROM transactions WHERE id = ?").run(id);
+  }
+};
+
+const getCreditWithDetails = (creditId) => {
+  const credit = db.prepare("SELECT * FROM credits WHERE id = ?").get(creditId);
+  if (!credit) return null;
+
+  credit.payments = db
+    .prepare("SELECT * FROM payments WHERE credit_id = ? ORDER BY date DESC")
+    .all(credit.id);
+  const totalPaidResult = db
+    .prepare("SELECT SUM(amount) as total FROM payments WHERE credit_id = ?")
+    .get(credit.id);
+  credit.totalPaid = totalPaidResult?.total || 0;
+  credit.remainingBalance = credit.amount - credit.totalPaid;
+  credit.includeInTotals = credit.includeInTotals === 1;
+
+  if (credit.totalPaid >= credit.amount) {
+    credit.status = "paid";
+  } else if (credit.totalPaid > 0) {
+    credit.status = "partially-paid";
+  } else {
+    credit.status = "unpaid";
+  }
+
+  return credit;
+};
+
+// --- Window Creation ---
 const createWindow = () => {
   const mainWindow = new BrowserWindow({
     width: 1200,
@@ -157,22 +168,21 @@ const createWindow = () => {
 };
 
 app.whenReady().then(createWindow);
-
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
     db.close();
     app.quit();
   }
 });
-
 app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
 });
 
-// --- IPC Handlers for Transactions ---
+// --- IPC Handlers ---
 
+// Transactions
 ipcMain.handle("get-transactions", () => {
   const stmt = db.prepare(`
     SELECT t.*, c.name as category
@@ -231,25 +241,42 @@ ipcMain.handle("update-transaction", (event, transaction) => {
 });
 
 ipcMain.handle("delete-transaction", (event, id) => {
-  const stmt = db.prepare("DELETE FROM transactions WHERE id = ?");
-  return stmt.run(id);
+  // This handler prevents deleting transactions linked to credits.
+  // Those should be deleted by deleting the credit/payment itself.
+  const creditLink = db
+    .prepare("SELECT id FROM credits WHERE transaction_id = ?")
+    .get(id);
+  const paymentLink = db
+    .prepare("SELECT id FROM payments WHERE transaction_id = ?")
+    .get(id);
+
+  if (creditLink || paymentLink) {
+    // Optionally, return an error to the frontend.
+    // For now, we just prevent deletion.
+    console.log(`Prevented deletion of linked transaction ID: ${id}`);
+    return {
+      error:
+        "This transaction is linked to a credit and cannot be deleted directly.",
+    };
+  }
+
+  deleteTransactionHelper(id);
+  return { success: true };
 });
 
-// --- IPC Handlers for Categories ---
-
+// Categories
 ipcMain.handle("get-categories", () => {
-  const stmt = db.prepare("SELECT * FROM categories ORDER BY name ASC");
-  return stmt.all();
+  return db.prepare("SELECT * FROM categories ORDER BY name ASC").all();
 });
-
 ipcMain.handle("add-category", (event, category) => {
   try {
     const stmt = db.prepare(
       "INSERT INTO categories (name, type, color) VALUES (?, ?, ?)"
     );
     const result = stmt.run(category.name, category.type, category.color);
-    const newCategoryStmt = db.prepare("SELECT * FROM categories WHERE id = ?");
-    return newCategoryStmt.get(result.lastInsertRowid);
+    return db
+      .prepare("SELECT * FROM categories WHERE id = ?")
+      .get(result.lastInsertRowid);
   } catch (error) {
     console.error("Failed to add category:", error);
     if (error.code === "SQLITE_CONSTRAINT_UNIQUE") {
@@ -258,9 +285,7 @@ ipcMain.handle("add-category", (event, category) => {
     return { error: "An unexpected error occurred." };
   }
 });
-
 ipcMain.handle("delete-category", (event, id) => {
-  // Set category_id to NULL for associated transactions before deleting the category
   const transaction = db.transaction((catId) => {
     db.prepare(
       "UPDATE transactions SET category_id = NULL WHERE category_id = ?"
@@ -271,86 +296,63 @@ ipcMain.handle("delete-category", (event, id) => {
   return { success: true };
 });
 
-// --- IPC Handlers for Credits ---
-const getCreditWithDetails = (creditId) => {
-  const creditStmt = db.prepare("SELECT * FROM credits WHERE id = ?");
-  const credit = creditStmt.get(creditId);
-
-  if (!credit) return null;
-
-  const paymentsStmt = db.prepare(
-    "SELECT * FROM payments WHERE credit_id = ? ORDER BY date DESC"
-  );
-  credit.payments = paymentsStmt.all(credit.id);
-
-  const totalPaidStmt = db.prepare(
-    "SELECT SUM(amount) as total FROM payments WHERE credit_id = ?"
-  );
-  credit.totalPaid = totalPaidStmt.get(credit.id)?.total || 0;
-  credit.remainingBalance = credit.amount - credit.totalPaid;
-
-  if (credit.totalPaid >= credit.amount) {
-    credit.status = "paid";
-  } else if (credit.totalPaid > 0) {
-    credit.status = "partially-paid";
-  } else {
-    credit.status = "unpaid";
-  }
-
-  return credit;
-};
-
+// --- Credits ---
 ipcMain.handle("get-credits", () => {
-  const creditsStmt = db.prepare("SELECT * FROM credits ORDER BY date DESC");
-  const credits = creditsStmt.all();
+  const credits = db.prepare("SELECT * FROM credits ORDER BY date DESC").all();
   return credits.map((credit) => getCreditWithDetails(credit.id));
 });
 
 ipcMain.handle("add-credit", (event, credit) => {
-  const addCreditAndTransaction = db.transaction((cr) => {
-    // Add the credit
+  const {
+    personName,
+    type,
+    amount,
+    description,
+    date,
+    dueDate,
+    includeInTotals,
+  } = credit;
+  const addCreditAndTransaction = db.transaction(() => {
+    let transactionId = null;
+    if (includeInTotals) {
+      const transactionType = type === "lent" ? "expense" : "income";
+      const transactionDescription =
+        type === "lent"
+          ? `Credit given to ${personName}`
+          : `Credit taken from ${personName}`;
+      transactionId = createTransaction(
+        transactionType,
+        amount,
+        transactionDescription,
+        date
+      );
+    }
+
     const creditStmt = db.prepare(
-      "INSERT INTO credits (personName, type, amount, description, date, dueDate) VALUES (?, ?, ?, ?, ?, ?)"
+      `INSERT INTO credits (personName, type, amount, description, date, dueDate, includeInTotals, transaction_id) 
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
     );
     const creditResult = creditStmt.run(
-      cr.personName,
-      cr.type,
-      cr.amount,
-      cr.description,
-      cr.date,
-      cr.dueDate
+      personName,
+      type,
+      amount,
+      description,
+      date,
+      dueDate,
+      includeInTotals ? 1 : 0,
+      transactionId
     );
-    const creditId = creditResult.lastInsertRowid;
-
-    // Add corresponding transaction
-    const transactionType = cr.type === "lent" ? "expense" : "income";
-    const transactionDescription =
-      cr.type === "lent"
-        ? `Credit given to ${cr.personName}`
-        : `Credit taken from ${cr.personName}`;
-
-    const transactionStmt = db.prepare(
-      `INSERT INTO transactions (type, amount, description, date, paymentMethod, status)
-           VALUES (?, ?, ?, ?, 'cash', 'cashed')`
-    );
-    transactionStmt.run(
-      transactionType,
-      cr.amount,
-      transactionDescription,
-      cr.date
-    );
-
-    return creditId;
+    return creditResult.lastInsertRowid;
   });
 
-  const newCreditId = addCreditAndTransaction(credit);
+  const newCreditId = addCreditAndTransaction();
   return getCreditWithDetails(newCreditId);
 });
 
 ipcMain.handle("update-credit", (event, credit) => {
   const stmt = db.prepare(
     `UPDATE credits
-     SET personName = ?, type = ?, amount = ?, description = ?, date = ?, dueDate = ?
+     SET personName = ?, type = ?, amount = ?, description = ?, date = ?, dueDate = ?, includeInTotals = ?
      WHERE id = ?`
   );
   stmt.run(
@@ -360,63 +362,144 @@ ipcMain.handle("update-credit", (event, credit) => {
     credit.description,
     credit.date,
     credit.dueDate,
+    credit.includeInTotals ? 1 : 0,
     credit.id
   );
-  // Note: This does not update the initial transaction. This might be desired behavior.
   return getCreditWithDetails(credit.id);
 });
 
 ipcMain.handle("delete-credit", (event, id) => {
-  // This will also delete all associated payments due to "ON DELETE CASCADE"
-  const stmt = db.prepare("DELETE FROM credits WHERE id = ?");
-  return stmt.run(id);
-});
-
-// --- IPC Handlers for Payments ---
-ipcMain.handle("add-payment", (event, { credit_id, amount, date }) => {
-  const addPaymentAndTransaction = db.transaction((p) => {
-    // Get credit details to determine transaction type
-    const creditStmt = db.prepare("SELECT * FROM credits WHERE id = ?");
-    const credit = creditStmt.get(p.credit_id);
-
-    if (!credit) {
-      throw new Error("Credit not found");
+  const deleteCreditAndTransactions = db.transaction(() => {
+    const credit = db
+      .prepare("SELECT transaction_id FROM credits WHERE id = ?")
+      .get(id);
+    if (credit) {
+      deleteTransactionHelper(credit.transaction_id);
     }
+    const payments = db
+      .prepare("SELECT transaction_id FROM payments WHERE credit_id = ?")
+      .all(id);
+    payments.forEach((p) => deleteTransactionHelper(p.transaction_id));
 
-    // Add the payment
-    const paymentStmt = db.prepare(
-      "INSERT INTO payments (credit_id, amount, date) VALUES (?, ?, ?)"
-    );
-    paymentStmt.run(p.credit_id, p.amount, p.date);
-
-    // Add corresponding transaction
-    const transactionType = credit.type === "lent" ? "income" : "expense";
-    const transactionDescription =
-      credit.type === "lent"
-        ? `Payment received from ${credit.personName}`
-        : `Payment made to ${credit.personName}`;
-
-    const transactionStmt = db.prepare(
-      `INSERT INTO transactions (type, amount, description, date, paymentMethod, status)
-           VALUES (?, ?, ?, ?, 'cash', 'cashed')`
-    );
-    transactionStmt.run(
-      transactionType,
-      p.amount,
-      transactionDescription,
-      p.date
-    );
+    db.prepare("DELETE FROM credits WHERE id = ?").run(id);
   });
 
-  addPaymentAndTransaction({ credit_id, amount, date });
+  deleteCreditAndTransactions();
+  return { success: true };
+});
+
+ipcMain.handle("toggle-credit-inclusion", (event, { credit_id, include }) => {
+  const toggleInclusion = db.transaction(() => {
+    const credit = db
+      .prepare("SELECT * FROM credits WHERE id = ?")
+      .get(credit_id);
+    if (!credit) return;
+
+    db.prepare("UPDATE credits SET includeInTotals = ? WHERE id = ?").run(
+      include ? 1 : 0,
+      credit_id
+    );
+
+    if (include) {
+      if (!credit.transaction_id) {
+        const transactionType = credit.type === "lent" ? "expense" : "income";
+        const desc =
+          credit.type === "lent"
+            ? `Credit given to ${credit.personName}`
+            : `Credit taken from ${credit.personName}`;
+        const transId = createTransaction(
+          transactionType,
+          credit.amount,
+          desc,
+          credit.date
+        );
+        db.prepare("UPDATE credits SET transaction_id = ? WHERE id = ?").run(
+          transId,
+          credit_id
+        );
+      }
+      const payments = db
+        .prepare(
+          "SELECT * FROM payments WHERE credit_id = ? AND transaction_id IS NULL"
+        )
+        .all(credit_id);
+      for (const p of payments) {
+        const transType = credit.type === "lent" ? "income" : "expense";
+        const desc =
+          credit.type === "lent"
+            ? `Payment received from ${credit.personName}`
+            : `Payment made to ${credit.personName}`;
+        const transId = createTransaction(transType, p.amount, desc, p.date);
+        db.prepare("UPDATE payments SET transaction_id = ? WHERE id = ?").run(
+          transId,
+          p.id
+        );
+      }
+    } else {
+      deleteTransactionHelper(credit.transaction_id);
+      db.prepare("UPDATE credits SET transaction_id = NULL WHERE id = ?").run(
+        credit_id
+      );
+      const payments = db
+        .prepare("SELECT * FROM payments WHERE credit_id = ?")
+        .all(credit_id);
+      for (const p of payments) {
+        deleteTransactionHelper(p.transaction_id);
+      }
+      db.prepare(
+        "UPDATE payments SET transaction_id = NULL WHERE credit_id = ?"
+      ).run(credit_id);
+    }
+  });
+
+  toggleInclusion();
   return getCreditWithDetails(credit_id);
 });
 
-ipcMain.handle("delete-payment", (event, { payment_id, credit_id }) => {
-  // Deleting payments and their associated transactions is complex.
-  // For now, we will just delete the payment record.
-  // A more robust solution would involve linking payments and transactions.
-  const stmt = db.prepare("DELETE FROM payments WHERE id = ?");
-  stmt.run(payment_id);
+// --- Payments ---
+ipcMain.handle("add-payment", (event, { credit_id, amount, date }) => {
+  const addPaymentAndTransaction = db.transaction(() => {
+    const credit = db
+      .prepare("SELECT * FROM credits WHERE id = ?")
+      .get(credit_id);
+    if (!credit) throw new Error("Credit not found");
+
+    let transactionId = null;
+    if (credit.includeInTotals) {
+      const transactionType = credit.type === "lent" ? "income" : "expense";
+      const desc =
+        credit.type === "lent"
+          ? `Payment received from ${credit.personName}`
+          : `Payment made to ${credit.personName}`;
+      transactionId = createTransaction(transactionType, amount, desc, date);
+    }
+
+    const paymentStmt = db.prepare(
+      "INSERT INTO payments (credit_id, amount, date, transaction_id) VALUES (?, ?, ?, ?)"
+    );
+    paymentStmt.run(credit_id, amount, date, transactionId);
+  });
+
+  addPaymentAndTransaction();
   return getCreditWithDetails(credit_id);
+});
+
+ipcMain.handle("delete-payment", (event, { payment_id }) => {
+  const deletePaymentAndTransaction = db.transaction(() => {
+    const payment = db
+      .prepare("SELECT * FROM payments WHERE id = ?")
+      .get(payment_id);
+    if (payment) {
+      deleteTransactionHelper(payment.transaction_id);
+      db.prepare("DELETE FROM payments WHERE id = ?").run(payment_id);
+      return payment.credit_id;
+    }
+    return null;
+  });
+
+  const creditId = deletePaymentAndTransaction();
+  if (creditId) {
+    return getCreditWithDetails(creditId);
+  }
+  return null;
 });
