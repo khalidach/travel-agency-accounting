@@ -34,7 +34,7 @@
   },
   "build": {
     "appId": "com.travelagency.desktop",
-    "productName": "TravelPro System",
+    "productName": "TravelPro accounting",
     "asar": true,
     "files": [
       "main.js",
