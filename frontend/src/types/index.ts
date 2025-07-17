@@ -21,6 +21,14 @@ export interface Category {
   createdAt: Date;
 }
 
+export interface Payment {
+  id: number;
+  credit_id: number;
+  amount: number;
+  date: Date;
+  createdAt: Date;
+}
+
 export interface Credit {
   id: number;
   personName: string;
@@ -29,8 +37,11 @@ export interface Credit {
   description?: string;
   date: Date;
   dueDate?: Date;
-  status: "unpaid" | "paid";
+  status: "unpaid" | "partially-paid" | "paid"; // This will be calculated
   createdAt: Date;
+  payments: Payment[]; // Array of payments
+  totalPaid: number; // Calculated field from the backend
+  remainingBalance: number; // Calculated field from the backend
 }
 
 export interface DateRange {

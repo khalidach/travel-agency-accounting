@@ -40,13 +40,13 @@ function App() {
   }, []);
 
   const saveTransaction = async (
-    transactionData: Partial<Transaction>, // Changed type to allow for ID during edits
+    transactionData: Partial<Transaction>,
     isEditing: boolean
   ) => {
     try {
       const payload = {
         ...transactionData,
-        date: new Date(transactionData.date!).toISOString().split("T")[0], // Added non-null assertion
+        date: new Date(transactionData.date!).toISOString().split("T")[0],
         cashedDate: transactionData.cashedDate
           ? new Date(transactionData.cashedDate).toISOString().split("T")[0]
           : null,
@@ -57,7 +57,7 @@ function App() {
       } else {
         await api.addTransaction(payload);
       }
-      fetchData();
+      fetchData(); // Refetch all data to keep everything in sync
     } catch (err) {
       console.error("Failed to save transaction", err);
       setError("Failed to save transaction.");
@@ -89,39 +89,47 @@ function App() {
   const deleteCategory = async (id: number) => {
     try {
       await api.deleteCategory(id);
-      fetchData();
+      fetchData(); // Refetch to update transactions with null category_id
     } catch (err) {
       console.error("Failed to delete category", err);
       setError("Failed to delete category.");
     }
   };
 
-  // Credit Handlers
-  const addCredit = async (
-    creditData: Omit<Credit, "id" | "createdAt" | "status">
+  // --- Credit and Payment Handlers ---
+
+  const saveCredit = async (
+    creditData:
+      | Omit<
+          Credit,
+          | "id"
+          | "createdAt"
+          | "status"
+          | "payments"
+          | "totalPaid"
+          | "remainingBalance"
+        >
+      | Credit,
+    isEditing: boolean
   ) => {
     try {
-      await api.addCredit({
+      const payload = {
         ...creditData,
-        date: new Date(creditData.date).toISOString().split("T")[0],
+        date: new Date(creditData.date!).toISOString().split("T")[0],
         dueDate: creditData.dueDate
           ? new Date(creditData.dueDate).toISOString().split("T")[0]
           : null,
-      });
-      fetchData();
-    } catch (err) {
-      console.error("Failed to add credit", err);
-      setError("Failed to add credit.");
-    }
-  };
+      };
 
-  const updateCreditStatus = async (id: number, status: "paid" | "unpaid") => {
-    try {
-      await api.updateCreditStatus(id, status);
-      fetchData();
+      if (isEditing) {
+        await api.updateCredit(payload);
+      } else {
+        await api.addCredit(payload);
+      }
+      fetchData(); // Refetch all data to reflect changes
     } catch (err) {
-      console.error("Failed to update credit status", err);
-      setError("Failed to update credit status.");
+      console.error("Failed to save credit", err);
+      setError("Failed to save credit.");
     }
   };
 
@@ -132,6 +140,39 @@ function App() {
     } catch (err) {
       console.error("Failed to delete credit", err);
       setError("Failed to delete credit.");
+    }
+  };
+
+  const addPayment = async (paymentData: {
+    credit_id: number;
+    amount: number;
+    date: string;
+  }) => {
+    try {
+      const updatedCredit = await api.addPayment(paymentData);
+      setCredits((prev) =>
+        prev.map((c) => (c.id === updatedCredit.id ? updatedCredit : c))
+      );
+      // Also refetch transactions to show the new payment transaction
+      const transactionsData = await api.getTransactions();
+      setTransactions(transactionsData);
+    } catch (err) {
+      console.error("Failed to add payment", err);
+      setError("Failed to add payment.");
+    }
+  };
+
+  const deletePayment = async (payment_id: number, credit_id: number) => {
+    try {
+      const updatedCredit = await api.deletePayment({ payment_id, credit_id });
+      setCredits((prev) =>
+        prev.map((c) => (c.id === updatedCredit.id ? updatedCredit : c))
+      );
+      // Refetch transactions as a payment-related transaction was likely deleted
+      fetchData();
+    } catch (err) {
+      console.error("Failed to delete payment", err);
+      setError("Failed to delete payment.");
     }
   };
 
@@ -167,9 +208,10 @@ function App() {
         return (
           <CreditManagement
             credits={credits}
-            onAddCredit={addCredit}
-            onUpdateCreditStatus={updateCreditStatus}
+            onSaveCredit={saveCredit}
             onDeleteCredit={deleteCredit}
+            onAddPayment={addPayment}
+            onDeletePayment={deletePayment}
           />
         );
       case "categories":

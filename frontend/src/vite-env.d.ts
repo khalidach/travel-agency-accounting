@@ -15,11 +15,19 @@ interface ElectronAPI {
   // Credits
   getCredits: () => Promise<any[]>;
   addCredit: (credit: any) => Promise<any>;
-  updateCreditStatus: (data: {
-    id: number;
-    status: "paid" | "unpaid";
-  }) => Promise<any>;
+  updateCredit: (credit: any) => Promise<any>;
   deleteCredit: (id: number) => Promise<void>;
+
+  // Payments
+  addPayment: (paymentData: {
+    credit_id: number;
+    amount: number;
+    date: string;
+  }) => Promise<any>;
+  deletePayment: (paymentData: {
+    payment_id: number;
+    credit_id: number;
+  }) => Promise<any>;
 }
 
 interface Window {

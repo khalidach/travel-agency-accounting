@@ -1,6 +1,19 @@
-import { Transaction, Category, Credit } from "../types";
+import { Transaction, Category, Credit, Payment } from "../types";
 
 const isElectron = !!window.electronAPI;
+
+// Helper to parse dates in credit objects
+const parseCreditDates = (credit: any): Credit => ({
+  ...credit,
+  date: new Date(credit.date),
+  dueDate: credit.dueDate ? new Date(credit.dueDate) : undefined,
+  createdAt: new Date(credit.createdAt),
+  payments: credit.payments.map((p: any) => ({
+    ...p,
+    date: new Date(p.date),
+    createdAt: new Date(p.createdAt),
+  })),
+});
 
 // --- Electron API (Offline) ---
 const electronAPI = {
@@ -63,41 +76,35 @@ const electronAPI = {
   // Credits
   getCredits: async (): Promise<Credit[]> => {
     const credits = await window.electronAPI.getCredits();
-    return credits.map((c: any) => ({
-      ...c,
-      date: new Date(c.date),
-      dueDate: c.dueDate ? new Date(c.dueDate) : undefined,
-      createdAt: new Date(c.createdAt),
-    }));
+    return credits.map(parseCreditDates);
   },
   addCredit: async (creditData: any): Promise<Credit> => {
     const newCredit = await window.electronAPI.addCredit(creditData);
-    return {
-      ...newCredit,
-      date: new Date(newCredit.date),
-      dueDate: newCredit.dueDate ? new Date(newCredit.dueDate) : undefined,
-      createdAt: new Date(newCredit.createdAt),
-    };
+    return parseCreditDates(newCredit);
   },
-  updateCreditStatus: async (
-    id: number,
-    status: "paid" | "unpaid"
-  ): Promise<Credit> => {
-    const updatedCredit = await window.electronAPI.updateCreditStatus({
-      id,
-      status,
-    });
-    return {
-      ...updatedCredit,
-      date: new Date(updatedCredit.date),
-      dueDate: updatedCredit.dueDate
-        ? new Date(updatedCredit.dueDate)
-        : undefined,
-      createdAt: new Date(updatedCredit.createdAt),
-    };
+  updateCredit: async (creditData: any): Promise<Credit> => {
+    const updatedCredit = await window.electronAPI.updateCredit(creditData);
+    return parseCreditDates(updatedCredit);
   },
   deleteCredit: (id: number): Promise<void> =>
     window.electronAPI.deleteCredit(id),
+
+  // Payments
+  addPayment: async (paymentData: {
+    credit_id: number;
+    amount: number;
+    date: string;
+  }): Promise<Credit> => {
+    const updatedCredit = await window.electronAPI.addPayment(paymentData);
+    return parseCreditDates(updatedCredit);
+  },
+  deletePayment: async (paymentData: {
+    payment_id: number;
+    credit_id: number;
+  }): Promise<Credit> => {
+    const updatedCredit = await window.electronAPI.deletePayment(paymentData);
+    return parseCreditDates(updatedCredit);
+  },
 };
 
 // For simplicity, this example assumes Electron environment.

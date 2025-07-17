@@ -1,53 +1,79 @@
 import React, { useState } from "react";
 import { Credit } from "../types";
-import { Plus, Trash2, Edit } from "lucide-react";
+import { Plus, Trash2, Edit, MoreVertical, X } from "lucide-react";
 import { format } from "date-fns";
 import { formatCurrency } from "../utils/calculations";
+import CreditForm from "./CreditForm";
+import PaymentForm from "./PaymentForm";
+import PaymentsList from "./PaymentsList";
 
 interface CreditManagementProps {
   credits: Credit[];
-  onAddCredit: (credit: Omit<Credit, "id" | "createdAt" | "status">) => void;
-  onUpdateCreditStatus: (id: number, status: "paid" | "unpaid") => void;
+  onSaveCredit: (
+    credit:
+      | Omit<
+          Credit,
+          | "id"
+          | "createdAt"
+          | "status"
+          | "payments"
+          | "totalPaid"
+          | "remainingBalance"
+        >
+      | Credit,
+    isEditing: boolean
+  ) => void;
   onDeleteCredit: (id: number) => void;
+  onAddPayment: (paymentData: {
+    credit_id: number;
+    amount: number;
+    date: string;
+  }) => void;
+  onDeletePayment: (payment_id: number, credit_id: number) => void;
 }
 
 const CreditManagement: React.FC<CreditManagementProps> = ({
   credits,
-  onAddCredit,
-  onUpdateCreditStatus,
+  onSaveCredit,
   onDeleteCredit,
+  onAddPayment,
+  onDeletePayment,
 }) => {
-  const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({
-    personName: "",
-    type: "lent" as "lent" | "borrowed",
-    amount: "",
-    description: "",
-    date: new Date().toISOString().split("T")[0],
-    dueDate: "",
-  });
+  const [showCreditForm, setShowCreditForm] = useState(false);
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [creditToEdit, setCreditToEdit] = useState<Credit | null>(null);
+  const [creditForPayment, setCreditForPayment] = useState<Credit | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.personName || !formData.amount) {
-      alert("Please fill in Person Name and Amount.");
-      return;
+  const handleOpenCreditForm = (credit?: Credit) => {
+    setCreditToEdit(credit || null);
+    setShowCreditForm(true);
+  };
+
+  const handleCloseCreditForm = () => {
+    setCreditToEdit(null);
+    setShowCreditForm(false);
+  };
+
+  const handleOpenPaymentForm = (credit: Credit) => {
+    setCreditForPayment(credit);
+    setShowPaymentForm(true);
+  };
+
+  const handleClosePaymentForm = () => {
+    setCreditForPayment(null);
+    setShowPaymentForm(false);
+  };
+
+  const getStatusChip = (status: string) => {
+    switch (status) {
+      case "paid":
+        return "bg-green-200 text-green-800";
+      case "partially-paid":
+        return "bg-yellow-200 text-yellow-800";
+      case "unpaid":
+      default:
+        return "bg-red-200 text-red-800";
     }
-    onAddCredit({
-      ...formData,
-      amount: parseFloat(formData.amount),
-      date: new Date(formData.date),
-      dueDate: formData.dueDate ? new Date(formData.dueDate) : undefined,
-    });
-    setShowForm(false);
-    setFormData({
-      personName: "",
-      type: "lent",
-      amount: "",
-      description: "",
-      date: new Date().toISOString().split("T")[0],
-      dueDate: "",
-    });
   };
 
   const creditsGiven = credits.filter((c) => c.type === "lent");
@@ -88,28 +114,41 @@ const CreditManagement: React.FC<CreditManagementProps> = ({
                       </p>
                     )}
                   </div>
+                  <div className="text-xs mt-2">
+                    <p>
+                      Paid:{" "}
+                      <span className="font-semibold text-green-700">
+                        {formatCurrency(credit.totalPaid)}
+                      </span>
+                    </p>
+                    <p>
+                      Balance:{" "}
+                      <span className="font-semibold text-red-700">
+                        {formatCurrency(credit.remainingBalance)}
+                      </span>
+                    </p>
+                  </div>
                 </div>
                 <div className="text-right">
                   <span
-                    className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                      credit.status === "paid"
-                        ? "bg-green-200 text-green-800"
-                        : "bg-yellow-200 text-yellow-800"
-                    }`}
+                    className={`px-2 py-1 text-xs font-semibold rounded-full ${getStatusChip(
+                      credit.status
+                    )}`}
                   >
-                    {credit.status}
+                    {credit.status.replace("-", " ")}
                   </span>
                   <div className="flex items-center gap-2 mt-4">
                     <button
-                      onClick={() =>
-                        onUpdateCreditStatus(
-                          credit.id,
-                          credit.status === "unpaid" ? "paid" : "unpaid"
-                        )
-                      }
+                      onClick={() => handleOpenPaymentForm(credit)}
                       className="text-sm text-blue-600 hover:underline"
                     >
-                      Mark as {credit.status === "unpaid" ? "Paid" : "Unpaid"}
+                      Manage Payments
+                    </button>
+                    <button
+                      onClick={() => handleOpenCreditForm(credit)}
+                      className="text-gray-500 hover:text-gray-700"
+                    >
+                      <Edit size={16} />
                     </button>
                     <button
                       onClick={() => onDeleteCredit(credit.id)}
@@ -120,6 +159,11 @@ const CreditManagement: React.FC<CreditManagementProps> = ({
                   </div>
                 </div>
               </div>
+              <PaymentsList
+                payments={credit.payments}
+                credit_id={credit.id}
+                onDeletePayment={onDeletePayment}
+              />
             </div>
           ))
         ) : (
@@ -136,7 +180,7 @@ const CreditManagement: React.FC<CreditManagementProps> = ({
           Credit Management
         </h2>
         <button
-          onClick={() => setShowForm(true)}
+          onClick={() => handleOpenCreditForm()}
           className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
         >
           <Plus className="h-4 w-4 mr-2" />
@@ -155,90 +199,19 @@ const CreditManagement: React.FC<CreditManagementProps> = ({
         />
       </div>
 
-      {showForm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
-            <div className="p-6 border-b">
-              <h3 className="text-lg font-medium">Add New Credit/Debit</h3>
-            </div>
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
-              {/* Form fields */}
-              <input
-                type="text"
-                placeholder="Person Name"
-                value={formData.personName}
-                onChange={(e) =>
-                  setFormData({ ...formData, personName: e.target.value })
-                }
-                className="w-full p-2 border rounded"
-                required
-              />
-              <select
-                value={formData.type}
-                onChange={(e) =>
-                  setFormData({
-                    ...formData,
-                    type: e.target.value as "lent" | "borrowed",
-                  })
-                }
-                className="w-full p-2 border rounded"
-              >
-                <option value="lent">Credit Given (Lent)</option>
-                <option value="borrowed">Credit Taken (Borrowed)</option>
-              </select>
-              <input
-                type="number"
-                placeholder="Amount"
-                value={formData.amount}
-                onChange={(e) =>
-                  setFormData({ ...formData, amount: e.target.value })
-                }
-                className="w-full p-2 border rounded"
-                required
-              />
-              <textarea
-                placeholder="Description"
-                value={formData.description}
-                onChange={(e) =>
-                  setFormData({ ...formData, description: e.target.value })
-                }
-                className="w-full p-2 border rounded"
-              />
-              <input
-                type="date"
-                value={formData.date}
-                onChange={(e) =>
-                  setFormData({ ...formData, date: e.target.value })
-                }
-                className="w-full p-2 border rounded"
-                required
-              />
-              <input
-                type="date"
-                value={formData.dueDate}
-                onChange={(e) =>
-                  setFormData({ ...formData, dueDate: e.target.value })
-                }
-                className="w-full p-2 border rounded"
-              />
-              <div className="flex justify-end gap-4">
-                <button
-                  type="button"
-                  onClick={() => setShowForm(false)}
-                  className="px-4 py-2 bg-gray-200 rounded"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded"
-                >
-                  Save
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
+      {showCreditForm && (
+        <CreditForm
+          onClose={handleCloseCreditForm}
+          onSubmit={onSaveCredit}
+          creditToEdit={creditToEdit}
+        />
+      )}
+      {showPaymentForm && creditForPayment && (
+        <PaymentForm
+          credit={creditForPayment}
+          onClose={handleClosePaymentForm}
+          onAddPayment={onAddPayment}
+        />
       )}
     </div>
   );
