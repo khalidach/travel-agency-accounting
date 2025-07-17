@@ -1,30 +1,34 @@
-import React, { useState } from 'react';
-import { Transaction, Category } from '../types';
-import { Plus } from 'lucide-react';
-import TransactionForm from './TransactionForm';
-import TransactionList from './TransactionList';
+import React, { useState } from "react";
+import { Transaction, Category } from "../types";
+import { Plus } from "lucide-react";
+import TransactionForm from "./TransactionForm";
+import TransactionList from "./TransactionList";
 
 interface IncomeManagementProps {
   transactions: Transaction[];
   categories: Category[];
-  onAddTransaction: (transaction: Omit<Transaction, 'id' | 'createdAt'>) => void;
-  onDeleteTransaction: (id: string) => void;
+  onAddTransaction: (
+    transaction: Omit<Transaction, "id" | "createdAt">
+  ) => void;
+  onDeleteTransaction: (id: number) => void;
 }
 
 const IncomeManagement: React.FC<IncomeManagementProps> = ({
   transactions,
   categories,
   onAddTransaction,
-  onDeleteTransaction
+  onDeleteTransaction,
 }) => {
   const [showForm, setShowForm] = useState(false);
 
-  const incomeTransactions = transactions.filter(t => t.type === 'income');
+  const incomeTransactions = transactions.filter((t) => t.type === "income");
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-2xl font-semibold text-gray-900">Income Management</h2>
+        <h2 className="text-2xl font-semibold text-gray-900">
+          Income Management
+        </h2>
         <button
           onClick={() => setShowForm(true)}
           className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"

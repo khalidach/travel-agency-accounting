@@ -1,97 +1,133 @@
-import React, { useState, useEffect } from 'react';
-import { Transaction, Category } from './types';
-import { generateId } from './utils/calculations';
-import { createDefaultCategories } from './data/defaultCategories';
-import Layout from './components/Layout';
-import Dashboard from './components/Dashboard';
-import IncomeManagement from './components/IncomeManagement';
-import ExpenseManagement from './components/ExpenseManagement';
-import CategoryManagement from './components/CategoryManagement';
-import Reports from './components/Reports';
+import { useState, useEffect } from "react";
+import { Transaction, Category } from "./types";
+import { api } from "./service/api";
+import Layout from "./components/Layout";
+import Dashboard from "./components/Dashboard";
+import IncomeManagement from "./components/IncomeManagement";
+import ExpenseManagement from "./components/ExpenseManagement";
+import CategoryManagement from "./components/CategoryManagement";
+import Reports from "./components/Reports";
 
 function App() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState("dashboard");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [transactionsData, categoriesData] = await Promise.all([
+        api.getTransactions(),
+        api.getCategories(),
+      ]);
+      setTransactions(transactionsData);
+      setCategories(categoriesData);
+      setError(null);
+    } catch (err) {
+      setError(
+        "Failed to load data. Please make sure the backend server or local database is available."
+      );
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    // Load data from localStorage on component mount
-    const savedTransactions = localStorage.getItem('transactions');
-    const savedCategories = localStorage.getItem('categories');
-
-    if (savedTransactions) {
-      setTransactions(JSON.parse(savedTransactions));
-    }
-
-    if (savedCategories) {
-      setCategories(JSON.parse(savedCategories));
-    } else {
-      // Initialize with default categories
-      const defaultCategories = createDefaultCategories();
-      setCategories(defaultCategories);
-      localStorage.setItem('categories', JSON.stringify(defaultCategories));
-    }
+    fetchData();
   }, []);
 
-  useEffect(() => {
-    // Save transactions to localStorage whenever they change
-    localStorage.setItem('transactions', JSON.stringify(transactions));
-  }, [transactions]);
+  const addTransaction = async (
+    transactionData: Omit<Transaction, "id" | "createdAt">
+  ) => {
+    try {
+      const categoryObj = categories.find(
+        (c) => c.name === transactionData.category
+      );
+      if (!categoryObj) {
+        throw new Error("Category not found");
+      }
 
-  useEffect(() => {
-    // Save categories to localStorage whenever they change
-    localStorage.setItem('categories', JSON.stringify(categories));
-  }, [categories]);
+      const newTransactionData = {
+        type: transactionData.type,
+        amount: transactionData.amount,
+        description: transactionData.description,
+        category_id: categoryObj.id,
+        date: new Date(transactionData.date).toISOString().split("T")[0],
+      };
 
-  const addTransaction = (transactionData: Omit<Transaction, 'id' | 'createdAt'>) => {
-    const newTransaction: Transaction = {
-      ...transactionData,
-      id: generateId(),
-      createdAt: new Date()
-    };
-    setTransactions(prev => [...prev, newTransaction]);
+      await api.addTransaction(newTransactionData);
+      fetchData(); // Refetch all data to stay in sync
+    } catch (err) {
+      console.error("Failed to add transaction", err);
+      setError("Failed to add transaction.");
+    }
   };
 
-  const deleteTransaction = (id: string) => {
-    setTransactions(prev => prev.filter(t => t.id !== id));
+  const deleteTransaction = async (id: number) => {
+    try {
+      await api.deleteTransaction(id);
+      setTransactions((prev) => prev.filter((t) => t.id !== id));
+    } catch (err) {
+      console.error("Failed to delete transaction", err);
+      setError("Failed to delete transaction.");
+    }
   };
 
-  const addCategory = (categoryData: Omit<Category, 'id' | 'createdAt'>) => {
-    const newCategory: Category = {
-      ...categoryData,
-      id: generateId(),
-      createdAt: new Date()
-    };
-    setCategories(prev => [...prev, newCategory]);
+  const addCategory = async (
+    categoryData: Omit<Category, "id" | "createdAt">
+  ) => {
+    try {
+      const newCategory = await api.addCategory(categoryData);
+      setCategories((prev) => [...prev, newCategory]);
+    } catch (err) {
+      console.error("Failed to add category", err);
+      setError("Failed to add category.");
+    }
   };
 
-  const deleteCategory = (id: string) => {
-    setCategories(prev => prev.filter(c => c.id !== id));
+  const deleteCategory = async (id: number) => {
+    try {
+      await api.deleteCategory(id);
+      // Refetch data since deleting a category also deletes its transactions on the backend
+      fetchData();
+    } catch (err) {
+      console.error("Failed to delete category", err);
+      setError("Failed to delete category.");
+    }
   };
 
   const renderContent = () => {
+    if (loading) {
+      return <div className="text-center p-8">Loading...</div>;
+    }
+    if (error) {
+      return <div className="text-center p-8 text-red-500">{error}</div>;
+    }
     switch (activeTab) {
-      case 'dashboard':
+      case "dashboard":
         return <Dashboard transactions={transactions} />;
-      case 'income':
+      case "income":
         return (
           <IncomeManagement
-            transactions={transactions}
-            categories={categories}
+            transactions={transactions.filter((t) => t.type === "income")}
+            categories={categories.filter((c) => c.type === "income")}
             onAddTransaction={addTransaction}
             onDeleteTransaction={deleteTransaction}
           />
         );
-      case 'expenses':
+      case "expenses":
         return (
           <ExpenseManagement
-            transactions={transactions}
-            categories={categories}
+            transactions={transactions.filter((t) => t.type === "expense")}
+            categories={categories.filter((c) => c.type === "expense")}
             onAddTransaction={addTransaction}
             onDeleteTransaction={deleteTransaction}
           />
         );
-      case 'categories':
+      case "categories":
         return (
           <CategoryManagement
             categories={categories}
@@ -99,7 +135,7 @@ function App() {
             onDeleteCategory={deleteCategory}
           />
         );
-      case 'reports':
+      case "reports":
         return <Reports transactions={transactions} categories={categories} />;
       default:
         return <Dashboard transactions={transactions} />;

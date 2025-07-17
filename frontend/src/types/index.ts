@@ -1,6 +1,6 @@
 export interface Transaction {
-  id: string;
-  type: 'income' | 'expense';
+  id: number;
+  type: "income" | "expense";
   amount: number;
   description: string;
   category: string;
@@ -9,9 +9,9 @@ export interface Transaction {
 }
 
 export interface Category {
-  id: string;
+  id: number;
   name: string;
-  type: 'income' | 'expense';
+  type: "income" | "expense";
   color: string;
   createdAt: Date;
 }

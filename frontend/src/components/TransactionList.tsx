@@ -1,35 +1,41 @@
-import React, { useState } from 'react';
-import { Transaction, Category } from '../types';
-import { formatCurrency } from '../utils/calculations';
-import { format } from 'date-fns';
-import { Search, Filter, Trash2 } from 'lucide-react';
+import React, { useState } from "react";
+import { Transaction, Category } from "../types";
+import { formatCurrency } from "../utils/calculations";
+import { format } from "date-fns";
+import { Search, Trash2 } from "lucide-react";
 
 interface TransactionListProps {
   transactions: Transaction[];
   categories: Category[];
-  onDelete: (id: string) => void;
+  onDelete: (id: number) => void;
 }
 
 const TransactionList: React.FC<TransactionListProps> = ({
   transactions,
   categories,
-  onDelete
+  onDelete,
 }) => {
-  const [searchTerm, setSearchTerm] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState('');
-  const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all');
+  const [searchTerm, setSearchTerm] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">(
+    "all"
+  );
 
-  const filteredTransactions = transactions.filter(transaction => {
-    const matchesSearch = transaction.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         transaction.category.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesCategory = categoryFilter === '' || transaction.category === categoryFilter;
-    const matchesType = typeFilter === 'all' || transaction.type === typeFilter;
+  const filteredTransactions = transactions.filter((transaction) => {
+    const matchesSearch =
+      transaction.description
+        .toLowerCase()
+        .includes(searchTerm.toLowerCase()) ||
+      transaction.category.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesCategory =
+      categoryFilter === "" || transaction.category === categoryFilter;
+    const matchesType = typeFilter === "all" || transaction.type === typeFilter;
 
     return matchesSearch && matchesCategory && matchesType;
   });
 
-  const sortedTransactions = filteredTransactions.sort((a, b) => 
-    new Date(b.date).getTime() - new Date(a.date).getTime()
+  const sortedTransactions = filteredTransactions.sort(
+    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
   );
 
   return (
@@ -46,7 +52,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
-          
+
           <div className="flex gap-2">
             <select
               value={categoryFilter}
@@ -54,16 +60,18 @@ const TransactionList: React.FC<TransactionListProps> = ({
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="">All Categories</option>
-              {categories.map(category => (
+              {categories.map((category) => (
                 <option key={category.id} value={category.name}>
                   {category.name}
                 </option>
               ))}
             </select>
-            
+
             <select
               value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value as 'all' | 'income' | 'expense')}
+              onChange={(e) =>
+                setTypeFilter(e.target.value as "all" | "income" | "expense")
+              }
               className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             >
               <option value="all">All Types</option>
@@ -85,25 +93,36 @@ const TransactionList: React.FC<TransactionListProps> = ({
               <div className="flex items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-center">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                      transaction.type === 'income' 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-red-100 text-red-800'
-                    }`}>
-                      {transaction.type === 'income' ? 'Income' : 'Expense'}
+                    <span
+                      className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                        transaction.type === "income"
+                          ? "bg-green-100 text-green-800"
+                          : "bg-red-100 text-red-800"
+                      }`}
+                    >
+                      {transaction.type === "income" ? "Income" : "Expense"}
                     </span>
-                    <span className="ml-2 text-sm text-gray-600">{transaction.category}</span>
+                    <span className="ml-2 text-sm text-gray-600">
+                      {transaction.category}
+                    </span>
                   </div>
-                  <p className="mt-1 text-sm font-medium text-gray-900">{transaction.description}</p>
+                  <p className="mt-1 text-sm font-medium text-gray-900">
+                    {transaction.description}
+                  </p>
                   <p className="mt-1 text-xs text-gray-500">
-                    {format(new Date(transaction.date), 'MMM dd, yyyy')}
+                    {format(new Date(transaction.date), "MMM dd, yyyy")}
                   </p>
                 </div>
                 <div className="flex items-center ml-4">
-                  <p className={`text-lg font-semibold mr-4 ${
-                    transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
-                  }`}>
-                    {transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}
+                  <p
+                    className={`text-lg font-semibold mr-4 ${
+                      transaction.type === "income"
+                        ? "text-green-600"
+                        : "text-red-600"
+                    }`}
+                  >
+                    {transaction.type === "income" ? "+" : "-"}
+                    {formatCurrency(transaction.amount)}
                   </p>
                   <button
                     onClick={() => onDelete(transaction.id)}
