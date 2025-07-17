@@ -7,8 +7,9 @@ import TransactionList from "./TransactionList";
 interface IncomeManagementProps {
   transactions: Transaction[];
   categories: Category[];
-  onAddTransaction: (
-    transaction: Omit<Transaction, "id" | "createdAt">
+  onSaveTransaction: (
+    transaction: Partial<Transaction>, // Corrected type to match child component
+    isEditing: boolean
   ) => void;
   onDeleteTransaction: (id: number) => void;
 }
@@ -16,10 +17,28 @@ interface IncomeManagementProps {
 const IncomeManagement: React.FC<IncomeManagementProps> = ({
   transactions,
   categories,
-  onAddTransaction,
+  onSaveTransaction,
   onDeleteTransaction,
 }) => {
   const [showForm, setShowForm] = useState(false);
+  const [transactionToEdit, setTransactionToEdit] =
+    useState<Transaction | null>(null);
+
+  const handleEdit = (transaction: Transaction) => {
+    setTransactionToEdit(transaction);
+    setShowForm(true);
+  };
+
+  const handleCloseForm = () => {
+    setShowForm(false);
+    setTransactionToEdit(null);
+  };
+
+  const handleSubmit = (transactionData: Partial<Transaction>) => {
+    // Corrected type here
+    onSaveTransaction(transactionData, !!transactionToEdit);
+    handleCloseForm();
+  };
 
   const incomeTransactions = transactions.filter((t) => t.type === "income");
 
@@ -30,8 +49,11 @@ const IncomeManagement: React.FC<IncomeManagementProps> = ({
           Income Management
         </h2>
         <button
-          onClick={() => setShowForm(true)}
-          className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+          onClick={() => {
+            setTransactionToEdit(null);
+            setShowForm(true);
+          }}
+          className="inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700"
         >
           <Plus className="h-4 w-4 mr-2" />
           Add Income
@@ -42,14 +64,16 @@ const IncomeManagement: React.FC<IncomeManagementProps> = ({
         transactions={incomeTransactions}
         categories={categories}
         onDelete={onDeleteTransaction}
+        onEdit={handleEdit}
       />
 
       {showForm && (
         <TransactionForm
           type="income"
           categories={categories}
-          onSubmit={onAddTransaction}
-          onClose={() => setShowForm(false)}
+          onSubmit={handleSubmit}
+          onClose={handleCloseForm}
+          transactionToEdit={transactionToEdit}
         />
       )}
     </div>

@@ -1,12 +1,13 @@
-import React, { ReactNode } from 'react';
-import { 
-  Home, 
-  TrendingUp, 
-  TrendingDown, 
-  Settings, 
-  BarChart3, 
-  DollarSign 
-} from 'lucide-react';
+import React, { ReactNode } from "react";
+import {
+  Home,
+  TrendingUp,
+  TrendingDown,
+  Settings,
+  BarChart3,
+  DollarSign,
+  Users,
+} from "lucide-react";
 
 interface LayoutProps {
   children: ReactNode;
@@ -14,13 +15,18 @@ interface LayoutProps {
   onTabChange: (tab: string) => void;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => {
+const Layout: React.FC<LayoutProps> = ({
+  children,
+  activeTab,
+  onTabChange,
+}) => {
   const tabs = [
-    { id: 'dashboard', label: 'Dashboard', icon: Home },
-    { id: 'income', label: 'Income', icon: TrendingUp },
-    { id: 'expenses', label: 'Expenses', icon: TrendingDown },
-    { id: 'categories', label: 'Categories', icon: Settings },
-    { id: 'reports', label: 'Reports', icon: BarChart3 }
+    { id: "dashboard", label: "Dashboard", icon: Home },
+    { id: "income", label: "Income", icon: TrendingUp },
+    { id: "expenses", label: "Expenses", icon: TrendingDown },
+    { id: "credits", label: "Credits", icon: Users },
+    { id: "categories", label: "Categories", icon: Settings },
+    { id: "reports", label: "Reports", icon: BarChart3 },
   ];
 
   return (
@@ -41,17 +47,17 @@ const Layout: React.FC<LayoutProps> = ({ children, activeTab, onTabChange }) => 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="mb-8">
           <div className="border-b border-gray-200">
-            <nav className="-mb-px flex space-x-8">
+            <nav className="-mb-px flex space-x-8 overflow-x-auto">
               {tabs.map((tab) => {
                 const Icon = tab.icon;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => onTabChange(tab.id)}
-                    className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm transition-colors ${
+                    className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap ${
                       activeTab === tab.id
-                        ? 'border-blue-500 text-blue-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                        ? "border-blue-500 text-blue-600"
+                        : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
                     }`}
                   >
                     <Icon className="h-4 w-4 mr-2" />

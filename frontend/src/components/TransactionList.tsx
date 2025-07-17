@@ -2,18 +2,20 @@ import React, { useState } from "react";
 import { Transaction, Category } from "../types";
 import { formatCurrency } from "../utils/calculations";
 import { format } from "date-fns";
-import { Search, Trash2 } from "lucide-react";
+import { Search, Trash2, Edit, CheckCircle, Clock } from "lucide-react";
 
 interface TransactionListProps {
   transactions: Transaction[];
   categories: Category[];
   onDelete: (id: number) => void;
+  onEdit: (transaction: Transaction) => void;
 }
 
 const TransactionList: React.FC<TransactionListProps> = ({
   transactions,
   categories,
   onDelete,
+  onEdit,
 }) => {
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
@@ -26,7 +28,8 @@ const TransactionList: React.FC<TransactionListProps> = ({
       transaction.description
         .toLowerCase()
         .includes(searchTerm.toLowerCase()) ||
-      transaction.category.toLowerCase().includes(searchTerm.toLowerCase());
+      (transaction.category &&
+        transaction.category.toLowerCase().includes(searchTerm.toLowerCase()));
     const matchesCategory =
       categoryFilter === "" || transaction.category === categoryFilter;
     const matchesType = typeFilter === "all" || transaction.type === typeFilter;
@@ -49,7 +52,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
               placeholder="Search transactions..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md"
             />
           </div>
 
@@ -57,7 +60,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
             <select
               value={categoryFilter}
               onChange={(e) => setCategoryFilter(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="px-3 py-2 border border-gray-300 rounded-md"
             >
               <option value="">All Categories</option>
               {categories.map((category) => (
@@ -72,7 +75,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
               onChange={(e) =>
                 setTypeFilter(e.target.value as "all" | "income" | "expense")
               }
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="px-3 py-2 border border-gray-300 rounded-md"
             >
               <option value="all">All Types</option>
               <option value="income">Income</option>
@@ -92,7 +95,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
             <div key={transaction.id} className="px-6 py-4 hover:bg-gray-50">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
-                  <div className="flex items-center">
+                  <div className="flex items-center gap-2">
                     <span
                       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
                         transaction.type === "income"
@@ -100,11 +103,13 @@ const TransactionList: React.FC<TransactionListProps> = ({
                           : "bg-red-100 text-red-800"
                       }`}
                     >
-                      {transaction.type === "income" ? "Income" : "Expense"}
+                      {transaction.type}
                     </span>
-                    <span className="ml-2 text-sm text-gray-600">
-                      {transaction.category}
-                    </span>
+                    {transaction.category && (
+                      <span className="text-sm text-gray-600">
+                        {transaction.category}
+                      </span>
+                    )}
                   </div>
                   <p className="mt-1 text-sm font-medium text-gray-900">
                     {transaction.description}
@@ -112,6 +117,26 @@ const TransactionList: React.FC<TransactionListProps> = ({
                   <p className="mt-1 text-xs text-gray-500">
                     {format(new Date(transaction.date), "MMM dd, yyyy")}
                   </p>
+                  {transaction.paymentMethod === "check" && (
+                    <div className="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                      <span>Check #{transaction.checkNumber}</span>
+                      {transaction.status === "pending" ? (
+                        <Clock size={12} className="text-orange-500" />
+                      ) : (
+                        <CheckCircle size={12} className="text-green-500" />
+                      )}
+                      <span>{transaction.status}</span>
+                      {transaction.cashedDate && (
+                        <span>
+                          Cashed:{" "}
+                          {format(
+                            new Date(transaction.cashedDate),
+                            "MMM dd, yyyy"
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center ml-4">
                   <p
@@ -125,8 +150,14 @@ const TransactionList: React.FC<TransactionListProps> = ({
                     {formatCurrency(transaction.amount)}
                   </p>
                   <button
+                    onClick={() => onEdit(transaction)}
+                    className="text-blue-400 hover:text-blue-600 mr-2"
+                  >
+                    <Edit className="h-4 w-4" />
+                  </button>
+                  <button
                     onClick={() => onDelete(transaction.id)}
-                    className="text-red-400 hover:text-red-600 transition-colors"
+                    className="text-red-400 hover:text-red-600"
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>

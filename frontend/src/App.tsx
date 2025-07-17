@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Transaction, Category } from "./types";
+import { Transaction, Category, Credit } from "./types";
 import { api } from "./service/api";
 import Layout from "./components/Layout";
 import Dashboard from "./components/Dashboard";
@@ -7,28 +7,28 @@ import IncomeManagement from "./components/IncomeManagement";
 import ExpenseManagement from "./components/ExpenseManagement";
 import CategoryManagement from "./components/CategoryManagement";
 import Reports from "./components/Reports";
+import CreditManagement from "./components/CreditManagement";
 
 function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [credits, setCredits] = useState<Credit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [transactionsData, categoriesData] = await Promise.all([
-        api.getTransactions(),
-        api.getCategories(),
-      ]);
+      const [transactionsData, categoriesData, creditsData] = await Promise.all(
+        [api.getTransactions(), api.getCategories(), api.getCredits()]
+      );
       setTransactions(transactionsData);
       setCategories(categoriesData);
+      setCredits(creditsData);
       setError(null);
     } catch (err) {
-      setError(
-        "Failed to load data. Please make sure the backend server or local database is available."
-      );
+      setError("Failed to load data. Please make sure the backend is running.");
       console.error(err);
     } finally {
       setLoading(false);
@@ -39,30 +39,28 @@ function App() {
     fetchData();
   }, []);
 
-  const addTransaction = async (
-    transactionData: Omit<Transaction, "id" | "createdAt">
+  const saveTransaction = async (
+    transactionData: Partial<Transaction>, // Changed type to allow for ID during edits
+    isEditing: boolean
   ) => {
     try {
-      const categoryObj = categories.find(
-        (c) => c.name === transactionData.category
-      );
-      if (!categoryObj) {
-        throw new Error("Category not found");
-      }
-
-      const newTransactionData = {
-        type: transactionData.type,
-        amount: transactionData.amount,
-        description: transactionData.description,
-        category_id: categoryObj.id,
-        date: new Date(transactionData.date).toISOString().split("T")[0],
+      const payload = {
+        ...transactionData,
+        date: new Date(transactionData.date!).toISOString().split("T")[0], // Added non-null assertion
+        cashedDate: transactionData.cashedDate
+          ? new Date(transactionData.cashedDate).toISOString().split("T")[0]
+          : null,
       };
 
-      await api.addTransaction(newTransactionData);
-      fetchData(); // Refetch all data to stay in sync
+      if (isEditing) {
+        await api.updateTransaction(payload);
+      } else {
+        await api.addTransaction(payload);
+      }
+      fetchData();
     } catch (err) {
-      console.error("Failed to add transaction", err);
-      setError("Failed to add transaction.");
+      console.error("Failed to save transaction", err);
+      setError("Failed to save transaction.");
     }
   };
 
@@ -91,11 +89,49 @@ function App() {
   const deleteCategory = async (id: number) => {
     try {
       await api.deleteCategory(id);
-      // Refetch data since deleting a category also deletes its transactions on the backend
       fetchData();
     } catch (err) {
       console.error("Failed to delete category", err);
       setError("Failed to delete category.");
+    }
+  };
+
+  // Credit Handlers
+  const addCredit = async (
+    creditData: Omit<Credit, "id" | "createdAt" | "status">
+  ) => {
+    try {
+      await api.addCredit({
+        ...creditData,
+        date: new Date(creditData.date).toISOString().split("T")[0],
+        dueDate: creditData.dueDate
+          ? new Date(creditData.dueDate).toISOString().split("T")[0]
+          : null,
+      });
+      fetchData();
+    } catch (err) {
+      console.error("Failed to add credit", err);
+      setError("Failed to add credit.");
+    }
+  };
+
+  const updateCreditStatus = async (id: number, status: "paid" | "unpaid") => {
+    try {
+      await api.updateCreditStatus(id, status);
+      fetchData();
+    } catch (err) {
+      console.error("Failed to update credit status", err);
+      setError("Failed to update credit status.");
+    }
+  };
+
+  const deleteCredit = async (id: number) => {
+    try {
+      await api.deleteCredit(id);
+      setCredits((prev) => prev.filter((c) => c.id !== id));
+    } catch (err) {
+      console.error("Failed to delete credit", err);
+      setError("Failed to delete credit.");
     }
   };
 
@@ -114,7 +150,7 @@ function App() {
           <IncomeManagement
             transactions={transactions.filter((t) => t.type === "income")}
             categories={categories.filter((c) => c.type === "income")}
-            onAddTransaction={addTransaction}
+            onSaveTransaction={saveTransaction}
             onDeleteTransaction={deleteTransaction}
           />
         );
@@ -123,8 +159,17 @@ function App() {
           <ExpenseManagement
             transactions={transactions.filter((t) => t.type === "expense")}
             categories={categories.filter((c) => c.type === "expense")}
-            onAddTransaction={addTransaction}
+            onSaveTransaction={saveTransaction}
             onDeleteTransaction={deleteTransaction}
+          />
+        );
+      case "credits":
+        return (
+          <CreditManagement
+            credits={credits}
+            onAddCredit={addCredit}
+            onUpdateCreditStatus={updateCreditStatus}
+            onDeleteCredit={deleteCredit}
           />
         );
       case "categories":

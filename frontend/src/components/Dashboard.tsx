@@ -1,30 +1,39 @@
-import React from 'react';
-import { Transaction, FinancialSummary } from '../types';
-import { calculateSummary, formatCurrency } from '../utils/calculations';
-import { TrendingUp, TrendingDown, DollarSign, FileText } from 'lucide-react';
-import { format } from 'date-fns';
+import React from "react";
+import { Transaction } from "../types";
+import { calculateSummary, formatCurrency } from "../utils/calculations";
+import { TrendingUp, TrendingDown, DollarSign, FileText } from "lucide-react";
+import { format, isAfter } from "date-fns";
 
 interface DashboardProps {
   transactions: Transaction[];
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ transactions }) => {
-  const summary = calculateSummary(transactions);
+  const today = new Date();
+  const visibleTransactions = transactions.filter((t) => {
+    if (t.paymentMethod === "check" && t.status === "pending") {
+      // If cashedDate is in the future, don't show it.
+      return t.cashedDate ? !isAfter(new Date(t.cashedDate), today) : false;
+    }
+    return true;
+  });
+
+  const summary = calculateSummary(visibleTransactions);
   const recentTransactions = transactions
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
     .slice(0, 5);
 
-  const StatCard = ({ 
-    title, 
-    value, 
-    icon: Icon, 
-    color, 
-    bgColor 
-  }: { 
-    title: string; 
-    value: string; 
-    icon: React.ElementType; 
-    color: string; 
+  const StatCard = ({
+    title,
+    value,
+    icon: Icon,
+    color,
+    bgColor,
+  }: {
+    title: string;
+    value: string;
+    icon: React.ElementType;
+    color: string;
     bgColor: string;
   }) => (
     <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-200">
@@ -61,8 +70,8 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions }) => {
           title="Net Profit"
           value={formatCurrency(summary.netProfit)}
           icon={DollarSign}
-          color={summary.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}
-          bgColor={summary.netProfit >= 0 ? 'bg-green-50' : 'bg-red-50'}
+          color={summary.netProfit >= 0 ? "text-green-600" : "text-red-600"}
+          bgColor={summary.netProfit >= 0 ? "bg-green-50" : "bg-red-50"}
         />
         <StatCard
           title="Total Transactions"
@@ -75,12 +84,14 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions }) => {
 
       <div className="bg-white rounded-lg shadow-sm border border-gray-200">
         <div className="px-6 py-4 border-b border-gray-200">
-          <h3 className="text-lg font-medium text-gray-900">Recent Transactions</h3>
+          <h3 className="text-lg font-medium text-gray-900">
+            Recent Transactions (All)
+          </h3>
         </div>
         <div className="divide-y divide-gray-200">
           {recentTransactions.length === 0 ? (
             <div className="px-6 py-8 text-center text-gray-500">
-              No transactions yet. Start by adding your first income or expense.
+              No transactions yet.
             </div>
           ) : (
             recentTransactions.map((transaction) => (
@@ -88,25 +99,38 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions }) => {
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
                     <div className="flex items-center">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                        transaction.type === 'income' 
-                          ? 'bg-green-100 text-green-800' 
-                          : 'bg-red-100 text-red-800'
-                      }`}>
-                        {transaction.type === 'income' ? 'Income' : 'Expense'}
+                      <span
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
+                          transaction.type === "income"
+                            ? "bg-green-100 text-green-800"
+                            : "bg-red-100 text-red-800"
+                        }`}
+                      >
+                        {transaction.type}
                       </span>
-                      <span className="ml-2 text-sm text-gray-600">{transaction.category}</span>
+                      {transaction.category && (
+                        <span className="ml-2 text-sm text-gray-600">
+                          {transaction.category}
+                        </span>
+                      )}
                     </div>
-                    <p className="mt-1 text-sm font-medium text-gray-900">{transaction.description}</p>
+                    <p className="mt-1 text-sm font-medium text-gray-900">
+                      {transaction.description}
+                    </p>
                     <p className="mt-1 text-xs text-gray-500">
-                      {format(new Date(transaction.date), 'MMM dd, yyyy')}
+                      {format(new Date(transaction.date), "MMM dd, yyyy")}
                     </p>
                   </div>
                   <div className="ml-4">
-                    <p className={`text-lg font-semibold ${
-                      transaction.type === 'income' ? 'text-green-600' : 'text-red-600'
-                    }`}>
-                      {transaction.type === 'income' ? '+' : '-'}{formatCurrency(transaction.amount)}
+                    <p
+                      className={`text-lg font-semibold ${
+                        transaction.type === "income"
+                          ? "text-green-600"
+                          : "text-red-600"
+                      }`}
+                    >
+                      {transaction.type === "income" ? "+" : "-"}
+                      {formatCurrency(transaction.amount)}
                     </p>
                   </div>
                 </div>

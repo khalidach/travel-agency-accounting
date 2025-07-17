@@ -1,9 +1,10 @@
-import { Transaction, Category } from "../types";
+import { Transaction, Category, Credit } from "../types";
 
 const isElectron = !!window.electronAPI;
 
 // --- Electron API (Offline) ---
 const electronAPI = {
+  // Categories
   getCategories: async (): Promise<Category[]> => {
     const categories = await window.electronAPI.getCategories();
     return categories.map((c: any) => ({
@@ -19,11 +20,14 @@ const electronAPI = {
   },
   deleteCategory: (id: number): Promise<void> =>
     window.electronAPI.deleteCategory(id),
+
+  // Transactions
   getTransactions: async (): Promise<Transaction[]> => {
     const transactions = await window.electronAPI.getTransactions();
     return transactions.map((t: any) => ({
       ...t,
       date: new Date(t.date),
+      cashedDate: t.cashedDate ? new Date(t.cashedDate) : undefined,
       createdAt: new Date(t.createdAt),
     }));
   },
@@ -34,72 +38,68 @@ const electronAPI = {
     return {
       ...newTransaction,
       date: new Date(newTransaction.date),
+      cashedDate: newTransaction.cashedDate
+        ? new Date(newTransaction.cashedDate)
+        : undefined,
       createdAt: new Date(newTransaction.createdAt),
+    };
+  },
+  updateTransaction: async (transactionData: any): Promise<Transaction> => {
+    const updatedTransaction = await window.electronAPI.updateTransaction(
+      transactionData
+    );
+    return {
+      ...updatedTransaction,
+      date: new Date(updatedTransaction.date),
+      cashedDate: updatedTransaction.cashedDate
+        ? new Date(updatedTransaction.cashedDate)
+        : undefined,
+      createdAt: new Date(updatedTransaction.createdAt),
     };
   },
   deleteTransaction: (id: number): Promise<void> =>
     window.electronAPI.deleteTransaction(id),
-};
 
-// --- Web API (Online) ---
-const API_URL = "http://localhost:3001/api";
-
-const webAPI = {
-  getCategories: async (): Promise<Category[]> => {
-    const response = await fetch(`${API_URL}/categories`);
-    if (!response.ok) throw new Error("Failed to fetch categories");
-    const categories: Category[] = await response.json();
-    return categories.map((c) => ({ ...c, createdAt: new Date(c.createdAt) }));
-  },
-  addCategory: async (
-    categoryData: Omit<Category, "id" | "createdAt">
-  ): Promise<Category> => {
-    const response = await fetch(`${API_URL}/categories`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(categoryData),
-    });
-    if (!response.ok) throw new Error("Failed to add category");
-    const newCategory: Category = await response.json();
-    return { ...newCategory, createdAt: new Date(newCategory.createdAt) };
-  },
-  deleteCategory: async (id: number): Promise<void> => {
-    const response = await fetch(`${API_URL}/categories/${id}`, {
-      method: "DELETE",
-    });
-    if (!response.ok) throw new Error("Failed to delete category");
-  },
-  getTransactions: async (): Promise<Transaction[]> => {
-    const response = await fetch(`${API_URL}/transactions`);
-    if (!response.ok) throw new Error("Failed to fetch transactions");
-    const transactions: any[] = await response.json();
-    return transactions.map((t: any) => ({
-      ...t,
-      date: new Date(t.date),
-      createdAt: new Date(t.created_at),
+  // Credits
+  getCredits: async (): Promise<Credit[]> => {
+    const credits = await window.electronAPI.getCredits();
+    return credits.map((c: any) => ({
+      ...c,
+      date: new Date(c.date),
+      dueDate: c.dueDate ? new Date(c.dueDate) : undefined,
+      createdAt: new Date(c.createdAt),
     }));
   },
-  addTransaction: async (transactionData: any): Promise<Transaction> => {
-    const response = await fetch(`${API_URL}/transactions`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(transactionData),
-    });
-    if (!response.ok) throw new Error("Failed to add transaction");
-    const newTransaction: any = await response.json();
+  addCredit: async (creditData: any): Promise<Credit> => {
+    const newCredit = await window.electronAPI.addCredit(creditData);
     return {
-      ...newTransaction,
-      date: new Date(newTransaction.date),
-      createdAt: new Date(newTransaction.createdAt),
+      ...newCredit,
+      date: new Date(newCredit.date),
+      dueDate: newCredit.dueDate ? new Date(newCredit.dueDate) : undefined,
+      createdAt: new Date(newCredit.createdAt),
     };
   },
-  deleteTransaction: async (id: number): Promise<void> => {
-    const response = await fetch(`${API_URL}/transactions/${id}`, {
-      method: "DELETE",
+  updateCreditStatus: async (
+    id: number,
+    status: "paid" | "unpaid"
+  ): Promise<Credit> => {
+    const updatedCredit = await window.electronAPI.updateCreditStatus({
+      id,
+      status,
     });
-    if (!response.ok) throw new Error("Failed to delete transaction");
+    return {
+      ...updatedCredit,
+      date: new Date(updatedCredit.date),
+      dueDate: updatedCredit.dueDate
+        ? new Date(updatedCredit.dueDate)
+        : undefined,
+      createdAt: new Date(updatedCredit.createdAt),
+    };
   },
+  deleteCredit: (id: number): Promise<void> =>
+    window.electronAPI.deleteCredit(id),
 };
 
-// Export the correct API based on the environment
-export const api = isElectron ? electronAPI : webAPI;
+// For simplicity, this example assumes Electron environment.
+// The webAPI part would need to be built out on a real server.
+export const api = electronAPI;

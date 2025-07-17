@@ -3,8 +3,13 @@ export interface Transaction {
   type: "income" | "expense";
   amount: number;
   description: string;
-  category: string;
+  category?: string; // Category is now optional
+  category_id?: number;
   date: Date;
+  paymentMethod: "cash" | "check";
+  checkNumber?: string;
+  cashedDate?: Date;
+  status: "cashed" | "pending";
   createdAt: Date;
 }
 
@@ -13,6 +18,18 @@ export interface Category {
   name: string;
   type: "income" | "expense";
   color: string;
+  createdAt: Date;
+}
+
+export interface Credit {
+  id: number;
+  personName: string;
+  type: "lent" | "borrowed"; // 'lent' is credit given, 'borrowed' is credit taken
+  amount: number;
+  description?: string;
+  date: Date;
+  dueDate?: Date;
+  status: "unpaid" | "paid";
   createdAt: Date;
 }
 

@@ -7,8 +7,9 @@ import TransactionList from "./TransactionList";
 interface ExpenseManagementProps {
   transactions: Transaction[];
   categories: Category[];
-  onAddTransaction: (
-    transaction: Omit<Transaction, "id" | "createdAt">
+  onSaveTransaction: (
+    transaction: Partial<Transaction>, // Corrected type to match child component
+    isEditing: boolean
   ) => void;
   onDeleteTransaction: (id: number) => void;
 }
@@ -16,10 +17,28 @@ interface ExpenseManagementProps {
 const ExpenseManagement: React.FC<ExpenseManagementProps> = ({
   transactions,
   categories,
-  onAddTransaction,
+  onSaveTransaction,
   onDeleteTransaction,
 }) => {
   const [showForm, setShowForm] = useState(false);
+  const [transactionToEdit, setTransactionToEdit] =
+    useState<Transaction | null>(null);
+
+  const handleEdit = (transaction: Transaction) => {
+    setTransactionToEdit(transaction);
+    setShowForm(true);
+  };
+
+  const handleCloseForm = () => {
+    setShowForm(false);
+    setTransactionToEdit(null);
+  };
+
+  const handleSubmit = (transactionData: Partial<Transaction>) => {
+    // Corrected type here
+    onSaveTransaction(transactionData, !!transactionToEdit);
+    handleCloseForm();
+  };
 
   const expenseTransactions = transactions.filter((t) => t.type === "expense");
 
@@ -30,8 +49,11 @@ const ExpenseManagement: React.FC<ExpenseManagementProps> = ({
           Expense Management
         </h2>
         <button
-          onClick={() => setShowForm(true)}
-          className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 transition-colors"
+          onClick={() => {
+            setTransactionToEdit(null);
+            setShowForm(true);
+          }}
+          className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
         >
           <Plus className="h-4 w-4 mr-2" />
           Add Expense
@@ -42,14 +64,16 @@ const ExpenseManagement: React.FC<ExpenseManagementProps> = ({
         transactions={expenseTransactions}
         categories={categories}
         onDelete={onDeleteTransaction}
+        onEdit={handleEdit}
       />
 
       {showForm && (
         <TransactionForm
           type="expense"
           categories={categories}
-          onSubmit={onAddTransaction}
-          onClose={() => setShowForm(false)}
+          onSubmit={handleSubmit}
+          onClose={handleCloseForm}
+          transactionToEdit={transactionToEdit}
         />
       )}
     </div>
