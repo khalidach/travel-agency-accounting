@@ -41,9 +41,40 @@ const getCreditWithDetails = (creditId) => {
   return credit;
 };
 
-const getCredits = () => {
-  const credits = db.prepare("SELECT * FROM credits ORDER BY date DESC").all();
-  return credits.map((credit) => getCreditWithDetails(credit.id));
+const getCredits = (options = {}) => {
+  const { page = 1, pageSize = 10, type } = options;
+  const offset = (page - 1) * pageSize;
+
+  let whereClauses = [];
+  let params = [];
+
+  if (type) {
+    whereClauses.push("type = ?");
+    params.push(type);
+  }
+
+  const where =
+    whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+
+  const credits = db
+    .prepare(
+      `SELECT * FROM credits ${where} ORDER BY date DESC LIMIT ? OFFSET ?`
+    )
+    .all(...params, pageSize, offset);
+
+  const total = db
+    .prepare(`SELECT COUNT(*) as count FROM credits ${where}`)
+    .get(...params).count;
+
+  return {
+    data: credits.map((credit) => getCreditWithDetails(credit.id)),
+    meta: {
+      total,
+      page,
+      pageSize,
+      pageCount: Math.ceil(total / pageSize),
+    },
+  };
 };
 
 const addCredit = (credit) => {

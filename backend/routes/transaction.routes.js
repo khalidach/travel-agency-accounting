@@ -7,6 +7,14 @@ const setupTransactionRoutes = () => {
   ipcMain.handle("add-transaction", transactionController.addTransaction);
   ipcMain.handle("update-transaction", transactionController.updateTransaction);
   ipcMain.handle("delete-transaction", transactionController.deleteTransaction);
+  ipcMain.handle(
+    "get-financial-summary",
+    transactionController.getFinancialSummary
+  );
+  ipcMain.handle(
+    "get-recent-transactions",
+    transactionController.getRecentTransactions
+  );
 };
 
 module.exports = {

@@ -1,15 +1,15 @@
-import React, { useState } from "react";
-import { Category } from "../types";
+import React, { useState, useEffect } from "react";
+import { Category, PaginatedResponse } from "../types";
 import { Plus, Trash2, X } from "lucide-react";
+import { api } from "../service/api";
+import Pagination from "./Pagination";
 
 interface CategoryManagementProps {
-  categories: Category[];
   onAddCategory: (category: Omit<Category, "id" | "createdAt">) => void;
   onDeleteCategory: (id: number) => void;
 }
 
 const CategoryManagement: React.FC<CategoryManagementProps> = ({
-  categories,
   onAddCategory,
   onDeleteCategory,
 }) => {
@@ -19,6 +19,32 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
     type: "income" as "income" | "expense",
     color: "#3B82F6",
   });
+  const [incomeCategories, setIncomeCategories] =
+    useState<PaginatedResponse<Category> | null>(null);
+  const [expenseCategories, setExpenseCategories] =
+    useState<PaginatedResponse<Category> | null>(null);
+  const [incomePage, setIncomePage] = useState(1);
+  const [expensePage, setExpensePage] = useState(1);
+
+  const fetchCategories = async () => {
+    const incomeRes = await api.getCategories({
+      page: incomePage,
+      pageSize: 5,
+      type: "income",
+    });
+    setIncomeCategories(incomeRes);
+
+    const expenseRes = await api.getCategories({
+      page: expensePage,
+      pageSize: 5,
+      type: "expense",
+    });
+    setExpenseCategories(expenseRes);
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, [incomePage, expensePage]);
 
   const colors = [
     "#3B82F6",
@@ -33,7 +59,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
     "#6B7280",
   ];
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!formData.name.trim()) {
@@ -41,7 +67,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
       return;
     }
 
-    onAddCategory({
+    await onAddCategory({
       name: formData.name.trim(),
       type: formData.type,
       color: formData.color,
@@ -54,10 +80,13 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
     });
 
     setShowForm(false);
+    fetchCategories();
   };
 
-  const incomeCategories = categories.filter((cat) => cat.type === "income");
-  const expenseCategories = categories.filter((cat) => cat.type === "expense");
+  const handleDelete = async (id: number) => {
+    await onDeleteCategory(id);
+    fetchCategories();
+  };
 
   const CategoryCard = ({ category }: { category: Category }) => (
     <div className="bg-white rounded-lg border border-gray-200 p-4 hover:shadow-md transition-shadow">
@@ -70,7 +99,7 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
           <span className="font-medium text-gray-900">{category.name}</span>
         </div>
         <button
-          onClick={() => onDeleteCategory(category.id)}
+          onClick={() => handleDelete(category.id)}
           className="text-red-400 hover:text-red-600 transition-colors"
         >
           <Trash2 className="h-4 w-4" />
@@ -100,15 +129,22 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
             Income Categories
           </h3>
           <div className="space-y-3">
-            {incomeCategories.map((category) => (
+            {incomeCategories?.data.map((category) => (
               <CategoryCard key={category.id} category={category} />
             ))}
-            {incomeCategories.length === 0 && (
+            {incomeCategories?.data.length === 0 && (
               <p className="text-gray-500 text-center py-8">
                 No income categories yet
               </p>
             )}
           </div>
+          {incomeCategories && (
+            <Pagination
+              currentPage={incomeCategories.meta.page}
+              pageCount={incomeCategories.meta.pageCount}
+              onPageChange={setIncomePage}
+            />
+          )}
         </div>
 
         <div className="bg-gray-50 rounded-lg p-6">
@@ -116,15 +152,22 @@ const CategoryManagement: React.FC<CategoryManagementProps> = ({
             Expense Categories
           </h3>
           <div className="space-y-3">
-            {expenseCategories.map((category) => (
+            {expenseCategories?.data.map((category) => (
               <CategoryCard key={category.id} category={category} />
             ))}
-            {expenseCategories.length === 0 && (
+            {expenseCategories?.data.length === 0 && (
               <p className="text-gray-500 text-center py-8">
                 No expense categories yet
               </p>
             )}
           </div>
+          {expenseCategories && (
+            <Pagination
+              currentPage={expenseCategories.meta.page}
+              pageCount={expenseCategories.meta.pageCount}
+              onPageChange={setExpensePage}
+            />
+          )}
         </div>
       </div>
 

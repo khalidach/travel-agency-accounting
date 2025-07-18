@@ -1,14 +1,15 @@
-import React, { useState } from "react";
-import { Credit } from "../types";
+import React, { useState, useEffect } from "react";
+import { Credit, PaginatedResponse } from "../types";
 import { Plus, Trash2, Edit } from "lucide-react";
 import { format } from "date-fns";
 import { formatCurrency } from "../utils/calculations";
 import CreditForm from "./CreditForm";
 import PaymentForm from "./PaymentForm";
 import PaymentsList from "./PaymentsList";
+import { api } from "../service/api";
+import Pagination from "./Pagination";
 
 interface CreditManagementProps {
-  credits: Credit[];
   onSaveCredit: (
     credit:
       | Omit<
@@ -34,7 +35,6 @@ interface CreditManagementProps {
 }
 
 const CreditManagement: React.FC<CreditManagementProps> = ({
-  credits,
   onSaveCredit,
   onDeleteCredit,
   onAddPayment,
@@ -45,6 +45,32 @@ const CreditManagement: React.FC<CreditManagementProps> = ({
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [creditToEdit, setCreditToEdit] = useState<Credit | null>(null);
   const [creditForPayment, setCreditForPayment] = useState<Credit | null>(null);
+  const [creditsGiven, setCreditsGiven] =
+    useState<PaginatedResponse<Credit> | null>(null);
+  const [creditsTaken, setCreditsTaken] =
+    useState<PaginatedResponse<Credit> | null>(null);
+  const [givenPage, setGivenPage] = useState(1);
+  const [takenPage, setTakenPage] = useState(1);
+
+  const fetchCredits = async () => {
+    const givenRes = await api.getCredits({
+      page: givenPage,
+      pageSize: 5,
+      type: "lent",
+    });
+    setCreditsGiven(givenRes);
+
+    const takenRes = await api.getCredits({
+      page: takenPage,
+      pageSize: 5,
+      type: "borrowed",
+    });
+    setCreditsTaken(takenRes);
+  };
+
+  useEffect(() => {
+    fetchCredits();
+  }, [givenPage, takenPage]);
 
   const handleOpenCreditForm = (credit?: Credit) => {
     setCreditToEdit(credit || null);
@@ -78,21 +104,22 @@ const CreditManagement: React.FC<CreditManagementProps> = ({
     }
   };
 
-  const creditsGiven = credits.filter((c) => c.type === "lent");
-  const creditsTaken = credits.filter((c) => c.type === "borrowed");
-
   const CreditList = ({
     title,
     creditItems,
+    page,
+    onPageChange,
   }: {
     title: string;
-    creditItems: Credit[];
+    creditItems: PaginatedResponse<Credit> | null;
+    page: number;
+    onPageChange: (page: number) => void;
   }) => (
     <div className="bg-gray-50 rounded-lg p-6">
       <h3 className="text-lg font-medium text-gray-900 mb-4">{title}</h3>
       <div className="space-y-3">
-        {creditItems.length > 0 ? (
-          creditItems.map((credit) => (
+        {creditItems && creditItems.data.length > 0 ? (
+          creditItems.data.map((credit) => (
             <div
               key={credit.id}
               className="bg-white rounded-lg border border-gray-200 p-4"
@@ -189,6 +216,13 @@ const CreditManagement: React.FC<CreditManagementProps> = ({
           <p className="text-gray-500 text-center py-8">No records found.</p>
         )}
       </div>
+      {creditItems && (
+        <Pagination
+          currentPage={creditItems.meta.page}
+          pageCount={creditItems.meta.pageCount}
+          onPageChange={onPageChange}
+        />
+      )}
     </div>
   );
 
@@ -211,10 +245,14 @@ const CreditManagement: React.FC<CreditManagementProps> = ({
         <CreditList
           title="Credits Given (Debtors)"
           creditItems={creditsGiven}
+          page={givenPage}
+          onPageChange={setGivenPage}
         />
         <CreditList
           title="Credits Taken (Creditors)"
           creditItems={creditsTaken}
+          page={takenPage}
+          onPageChange={setTakenPage}
         />
       </div>
 

@@ -1,14 +1,48 @@
 // backend/services/transaction.service.js
 const db = require("../db-init");
 
-const getTransactions = () => {
-  const stmt = db.prepare(`
+const getTransactions = (options = {}) => {
+  const { page = 1, pageSize = 10, type } = options;
+  const offset = (page - 1) * pageSize;
+
+  let whereClauses = [];
+  let params = [];
+
+  if (type) {
+    whereClauses.push("t.type = ?");
+    params.push(type);
+  }
+
+  const where =
+    whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+
+  const query = `
     SELECT t.*, c.name as category
     FROM transactions t
     LEFT JOIN categories c ON t.category_id = c.id
+    ${where}
     ORDER BY t.date DESC
-  `);
-  return stmt.all();
+    LIMIT ? OFFSET ?
+  `;
+
+  const transactions = db.prepare(query).all(...params, pageSize, offset);
+
+  const countQuery = `
+    SELECT COUNT(*) as count
+    FROM transactions t
+    ${where}
+  `;
+  const total = db.prepare(countQuery).get(...params).count;
+
+  return {
+    data: transactions,
+    meta: {
+      total,
+      page,
+      pageSize,
+      pageCount: Math.ceil(total / pageSize),
+    },
+  };
 };
 
 const addTransaction = (transaction) => {
@@ -78,9 +112,58 @@ const deleteTransaction = (id) => {
   return { success: true };
 };
 
+const getFinancialSummary = (dateRange) => {
+  const { start, end } = dateRange;
+
+  const summary = db
+    .prepare(
+      `
+    SELECT
+      SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as totalIncome,
+      SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as totalExpenses
+    FROM transactions
+    WHERE date BETWEEN ? AND ? AND status = 'cashed'
+  `
+    )
+    .get(start, end);
+
+  const transactionCount = db
+    .prepare(
+      `
+    SELECT COUNT(*) as count
+    FROM transactions
+    WHERE date BETWEEN ? AND ? AND status = 'cashed'
+  `
+    )
+    .get(start, end).count;
+
+  return {
+    totalIncome: summary.totalIncome || 0,
+    totalExpenses: summary.totalExpenses || 0,
+    netProfit: (summary.totalIncome || 0) - (summary.totalExpenses || 0),
+    transactionCount,
+  };
+};
+
+const getRecentTransactions = (limit = 5) => {
+  return db
+    .prepare(
+      `
+    SELECT t.*, c.name as category
+    FROM transactions t
+    LEFT JOIN categories c ON t.category_id = c.id
+    ORDER BY t.date DESC
+    LIMIT ?
+  `
+    )
+    .all(limit);
+};
+
 module.exports = {
   getTransactions,
   addTransaction,
   updateTransaction,
   deleteTransaction,
+  getFinancialSummary,
+  getRecentTransactions,
 };

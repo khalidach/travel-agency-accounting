@@ -1,10 +1,8 @@
-import React, { useState } from "react";
-import { Transaction, Category } from "../types";
+import React, { useState, useEffect } from "react";
+import { Transaction, Category, FinancialSummary } from "../types";
 import {
-  calculateSummary,
   formatCurrency,
   groupTransactionsByCategory,
-  filterTransactionsByDateRange,
 } from "../utils/calculations";
 import {
   Chart as ChartJS,
@@ -16,9 +14,10 @@ import {
   Tooltip,
   Legend,
 } from "chart.js";
-import { Bar, Doughnut } from "react-chartjs-2";
-import { format, subMonths, startOfMonth, endOfMonth, isAfter } from "date-fns";
+import { Doughnut } from "react-chartjs-2";
+import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import { Calendar, Download, TrendingUp, TrendingDown } from "lucide-react";
+import { api } from "../service/api";
 
 ChartJS.register(
   CategoryScale,
@@ -31,39 +30,36 @@ ChartJS.register(
 );
 
 interface ReportsProps {
-  transactions: Transaction[];
   categories: Category[];
 }
 
-const Reports: React.FC<ReportsProps> = ({ transactions, categories }) => {
+const Reports: React.FC<ReportsProps> = ({ categories }) => {
   const [dateRange, setDateRange] = useState({
     start: format(startOfMonth(subMonths(new Date(), 2)), "yyyy-MM-dd"),
     end: format(endOfMonth(new Date()), "yyyy-MM-dd"),
   });
+  const [summary, setSummary] = useState<FinancialSummary | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
-  const today = new Date();
-  const visibleTransactions = transactions.filter((t) => {
-    if (t.paymentMethod === "check" && t.status === "pending") {
-      return t.cashedDate ? !isAfter(new Date(t.cashedDate), today) : false;
-    }
-    return true;
-  });
+  useEffect(() => {
+    const fetchData = async () => {
+      const summaryData = await api.getFinancialSummary({
+        start: dateRange.start,
+        end: dateRange.end,
+      });
+      setSummary(summaryData);
 
-  const filteredTransactions = filterTransactionsByDateRange(
-    visibleTransactions,
-    {
-      start: new Date(dateRange.start),
-      end: new Date(dateRange.end),
-    }
-  );
+      const transData = await api.getTransactions({
+        page: 1,
+        pageSize: 1000, // A large number to get all transactions for the report
+      }); // This could be further optimized
+      setTransactions(transData.data);
+    };
+    fetchData();
+  }, [dateRange]);
 
-  const summary = calculateSummary(filteredTransactions);
-  const incomeTransactions = filteredTransactions.filter(
-    (t) => t.type === "income"
-  );
-  const expenseTransactions = filteredTransactions.filter(
-    (t) => t.type === "expense"
-  );
+  const incomeTransactions = transactions.filter((t) => t.type === "income");
+  const expenseTransactions = transactions.filter((t) => t.type === "expense");
 
   const incomeByCategory = groupTransactionsByCategory(incomeTransactions);
   const expenseByCategory = groupTransactionsByCategory(expenseTransactions);
@@ -123,7 +119,7 @@ const Reports: React.FC<ReportsProps> = ({ transactions, categories }) => {
         "Cashed Date",
         "Status",
       ],
-      ...filteredTransactions.map((t) => [
+      ...transactions.map((t) => [
         format(new Date(t.date), "yyyy-MM-dd"),
         t.type,
         t.category || "N/A",
@@ -146,6 +142,10 @@ const Reports: React.FC<ReportsProps> = ({ transactions, categories }) => {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  if (!summary) {
+    return <div>Loading...</div>;
+  }
 
   return (
     <div className="space-y-6">

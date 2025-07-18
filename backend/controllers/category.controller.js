@@ -1,8 +1,8 @@
 // backend/controllers/category.controller.js
 const categoryService = require("../services/category.service");
 
-const getCategories = (event) => {
-  return categoryService.getCategories();
+const getCategories = (event, options) => {
+  return categoryService.getCategories(options);
 };
 
 const addCategory = (event, category) => {

@@ -1,8 +1,8 @@
 // backend/controllers/transaction.controller.js
 const transactionService = require("../services/transaction.service");
 
-const getTransactions = (event) => {
-  return transactionService.getTransactions();
+const getTransactions = (event, options) => {
+  return transactionService.getTransactions(options);
 };
 
 const addTransaction = (event, transaction) => {
@@ -17,9 +17,19 @@ const deleteTransaction = (event, id) => {
   return transactionService.deleteTransaction(id);
 };
 
+const getFinancialSummary = (event, dateRange) => {
+  return transactionService.getFinancialSummary(dateRange);
+};
+
+const getRecentTransactions = (event, limit) => {
+  return transactionService.getRecentTransactions(limit);
+};
+
 module.exports = {
   getTransactions,
   addTransaction,
   updateTransaction,
   deleteTransaction,
+  getFinancialSummary,
+  getRecentTransactions,
 };

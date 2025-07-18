@@ -1,8 +1,8 @@
 // backend/controllers/credit.controller.js
 const creditService = require("../services/credit.service");
 
-const getCredits = (event) => {
-  return creditService.getCredits();
+const getCredits = (event, options) => {
+  return creditService.getCredits(options);
 };
 
 const addCredit = (event, credit) => {

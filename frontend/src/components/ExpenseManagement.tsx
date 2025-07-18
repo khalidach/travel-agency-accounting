@@ -1,21 +1,21 @@
-import React, { useState } from "react";
-import { Transaction, Category } from "../types";
+import React, { useState, useEffect } from "react";
+import { Transaction, Category, PaginatedResponse } from "../types";
 import { Plus } from "lucide-react";
 import TransactionForm from "./TransactionForm";
 import TransactionList from "./TransactionList";
+import { api } from "../service/api";
+import Pagination from "./Pagination";
 
 interface ExpenseManagementProps {
-  transactions: Transaction[];
   categories: Category[];
   onSaveTransaction: (
-    transaction: Partial<Transaction>, // Corrected type to match child component
+    transaction: Partial<Transaction>,
     isEditing: boolean
   ) => void;
   onDeleteTransaction: (id: number) => void;
 }
 
 const ExpenseManagement: React.FC<ExpenseManagementProps> = ({
-  transactions,
   categories,
   onSaveTransaction,
   onDeleteTransaction,
@@ -23,6 +23,22 @@ const ExpenseManagement: React.FC<ExpenseManagementProps> = ({
   const [showForm, setShowForm] = useState(false);
   const [transactionToEdit, setTransactionToEdit] =
     useState<Transaction | null>(null);
+  const [transactions, setTransactions] =
+    useState<PaginatedResponse<Transaction> | null>(null);
+  const [page, setPage] = useState(1);
+
+  const fetchTransactions = async () => {
+    const res = await api.getTransactions({
+      page,
+      pageSize: 10,
+      type: "expense",
+    });
+    setTransactions(res);
+  };
+
+  useEffect(() => {
+    fetchTransactions();
+  }, [page]);
 
   const handleEdit = (transaction: Transaction) => {
     setTransactionToEdit(transaction);
@@ -34,13 +50,16 @@ const ExpenseManagement: React.FC<ExpenseManagementProps> = ({
     setTransactionToEdit(null);
   };
 
-  const handleSubmit = (transactionData: Partial<Transaction>) => {
-    // Corrected type here
-    onSaveTransaction(transactionData, !!transactionToEdit);
+  const handleSubmit = async (transactionData: Partial<Transaction>) => {
+    await onSaveTransaction(transactionData, !!transactionToEdit);
     handleCloseForm();
+    fetchTransactions();
   };
 
-  const expenseTransactions = transactions.filter((t) => t.type === "expense");
+  const handleDelete = async (id: number) => {
+    await onDeleteTransaction(id);
+    fetchTransactions();
+  };
 
   return (
     <div className="space-y-6">
@@ -60,12 +79,21 @@ const ExpenseManagement: React.FC<ExpenseManagementProps> = ({
         </button>
       </div>
 
-      <TransactionList
-        transactions={expenseTransactions}
-        categories={categories}
-        onDelete={onDeleteTransaction}
-        onEdit={handleEdit}
-      />
+      {transactions && (
+        <>
+          <TransactionList
+            transactions={transactions.data}
+            categories={categories}
+            onDelete={handleDelete}
+            onEdit={handleEdit}
+          />
+          <Pagination
+            currentPage={transactions.meta.page}
+            pageCount={transactions.meta.pageCount}
+            onPageChange={setPage}
+          />
+        </>
+      )}
 
       {showForm && (
         <TransactionForm

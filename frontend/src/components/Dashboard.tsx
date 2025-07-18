@@ -1,27 +1,31 @@
-import React from "react";
-import { Transaction } from "../types";
-import { calculateSummary, formatCurrency } from "../utils/calculations";
+import React, { useState, useEffect } from "react";
+import { Transaction, FinancialSummary } from "../types";
+import { formatCurrency } from "../utils/calculations";
 import { TrendingUp, TrendingDown, DollarSign, FileText } from "lucide-react";
-import { format, isAfter } from "date-fns";
+import { format } from "date-fns";
+import { api } from "../service/api";
 
-interface DashboardProps {
-  transactions: Transaction[];
-}
+const Dashboard: React.FC = () => {
+  const [summary, setSummary] = useState<FinancialSummary | null>(null);
+  const [recentTransactions, setRecentTransactions] = useState<Transaction[]>(
+    []
+  );
 
-const Dashboard: React.FC<DashboardProps> = ({ transactions }) => {
-  const today = new Date();
-  const visibleTransactions = transactions.filter((t) => {
-    if (t.paymentMethod === "check" && t.status === "pending") {
-      // If cashedDate is in the future, don't show it.
-      return t.cashedDate ? !isAfter(new Date(t.cashedDate), today) : false;
-    }
-    return true;
-  });
+  useEffect(() => {
+    const fetchData = async () => {
+      const today = new Date();
+      const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+      const summaryData = await api.getFinancialSummary({
+        start: monthStart.toISOString().split("T")[0],
+        end: today.toISOString().split("T")[0],
+      });
+      setSummary(summaryData);
 
-  const summary = calculateSummary(visibleTransactions);
-  const recentTransactions = transactions
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
-    .slice(0, 5);
+      const recentData = await api.getRecentTransactions(5);
+      setRecentTransactions(recentData);
+    };
+    fetchData();
+  }, []);
 
   const StatCard = ({
     title,
@@ -49,32 +53,36 @@ const Dashboard: React.FC<DashboardProps> = ({ transactions }) => {
     </div>
   );
 
+  if (!summary) {
+    return <div>Loading...</div>;
+  }
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard
-          title="Total Income"
+          title="Total Income (This Month)"
           value={formatCurrency(summary.totalIncome)}
           icon={TrendingUp}
           color="text-green-600"
           bgColor="bg-green-50"
         />
         <StatCard
-          title="Total Expenses"
+          title="Total Expenses (This Month)"
           value={formatCurrency(summary.totalExpenses)}
           icon={TrendingDown}
           color="text-red-600"
           bgColor="bg-red-50"
         />
         <StatCard
-          title="Net Profit"
+          title="Net Profit (This Month)"
           value={formatCurrency(summary.netProfit)}
           icon={DollarSign}
           color={summary.netProfit >= 0 ? "text-green-600" : "text-red-600"}
           bgColor={summary.netProfit >= 0 ? "bg-green-50" : "bg-red-50"}
         />
         <StatCard
-          title="Total Transactions"
+          title="Total Transactions (This Month)"
           value={summary.transactionCount.toString()}
           icon={FileText}
           color="text-blue-600"

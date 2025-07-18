@@ -1,8 +1,40 @@
 // backend/services/category.service.js
 const db = require("../db-init");
 
-const getCategories = () => {
-  return db.prepare("SELECT * FROM categories ORDER BY name ASC").all();
+const getCategories = (options = {}) => {
+  const { page = 1, pageSize = 10, type } = options;
+  const offset = (page - 1) * pageSize;
+
+  let whereClauses = [];
+  let params = [];
+
+  if (type) {
+    whereClauses.push("type = ?");
+    params.push(type);
+  }
+
+  const where =
+    whereClauses.length > 0 ? `WHERE ${whereClauses.join(" AND ")}` : "";
+
+  const categories = db
+    .prepare(
+      `SELECT * FROM categories ${where} ORDER BY name ASC LIMIT ? OFFSET ?`
+    )
+    .all(...params, pageSize, offset);
+
+  const total = db
+    .prepare(`SELECT COUNT(*) as count FROM categories ${where}`)
+    .get(...params).count;
+
+  return {
+    data: categories,
+    meta: {
+      total,
+      page,
+      pageSize,
+      pageCount: Math.ceil(total / pageSize),
+    },
+  };
 };
 
 const addCategory = (category) => {

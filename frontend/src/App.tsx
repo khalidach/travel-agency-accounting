@@ -11,21 +11,18 @@ import CreditManagement from "./components/CreditManagement";
 
 function App() {
   const [activeTab, setActiveTab] = useState("dashboard");
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [credits, setCredits] = useState<Credit[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchData = async () => {
+  const fetchInitialData = async () => {
     try {
       setLoading(true);
-      const [transactionsData, categoriesData, creditsData] = await Promise.all(
-        [api.getTransactions(), api.getCategories(), api.getCredits()]
-      );
-      setTransactions(transactionsData);
-      setCategories(categoriesData);
-      setCredits(creditsData);
+      const categoriesData = await api.getCategories({
+        page: 1,
+        pageSize: 1000,
+      }); // Fetch all for dropdowns
+      setCategories(categoriesData.data);
       setError(null);
     } catch (err) {
       setError("Failed to load data. Please make sure the backend is running.");
@@ -36,7 +33,7 @@ function App() {
   };
 
   useEffect(() => {
-    fetchData();
+    fetchInitialData();
   }, []);
 
   const saveTransaction = async (
@@ -57,7 +54,6 @@ function App() {
       } else {
         await api.addTransaction(payload);
       }
-      fetchData(); // Refetch all data to keep everything in sync
     } catch (err) {
       console.error("Failed to save transaction", err);
       setError("Failed to save transaction.");
@@ -67,7 +63,6 @@ function App() {
   const deleteTransaction = async (id: number) => {
     try {
       await api.deleteTransaction(id);
-      setTransactions((prev) => prev.filter((t) => t.id !== id));
     } catch (err) {
       console.error("Failed to delete transaction", err);
       setError("Failed to delete transaction.");
@@ -78,8 +73,8 @@ function App() {
     categoryData: Omit<Category, "id" | "createdAt">
   ) => {
     try {
-      const newCategory = await api.addCategory(categoryData);
-      setCategories((prev) => [...prev, newCategory]);
+      await api.addCategory(categoryData);
+      fetchInitialData(); // Refetch all categories
     } catch (err) {
       console.error("Failed to add category", err);
       setError("Failed to add category.");
@@ -89,7 +84,7 @@ function App() {
   const deleteCategory = async (id: number) => {
     try {
       await api.deleteCategory(id);
-      fetchData(); // Refetch to update transactions with null category_id
+      fetchInitialData(); // Refetch all categories
     } catch (err) {
       console.error("Failed to delete category", err);
       setError("Failed to delete category.");
@@ -126,7 +121,6 @@ function App() {
       } else {
         await api.addCredit(payload);
       }
-      fetchData(); // Refetch all data to reflect changes
     } catch (err) {
       console.error("Failed to save credit", err);
       setError("Failed to save credit.");
@@ -136,7 +130,6 @@ function App() {
   const deleteCredit = async (id: number) => {
     try {
       await api.deleteCredit(id);
-      fetchData();
     } catch (err) {
       console.error("Failed to delete credit", err);
       setError("Failed to delete credit.");
@@ -149,12 +142,7 @@ function App() {
     date: string;
   }) => {
     try {
-      const updatedCredit = await api.addPayment(paymentData);
-      setCredits((prev) =>
-        prev.map((c) => (c.id === updatedCredit.id ? updatedCredit : c))
-      );
-      // Also refetch transactions to show the new payment transaction
-      fetchData();
+      await api.addPayment(paymentData);
     } catch (err) {
       console.error("Failed to add payment", err);
       setError("Failed to add payment.");
@@ -163,14 +151,7 @@ function App() {
 
   const deletePayment = async (payment_id: number) => {
     try {
-      const updatedCredit = await api.deletePayment({ payment_id });
-      if (updatedCredit) {
-        setCredits((prev) =>
-          prev.map((c) => (c.id === updatedCredit.id ? updatedCredit : c))
-        );
-      }
-      // Refetch transactions as a payment-related transaction was likely deleted
-      fetchData();
+      await api.deletePayment({ payment_id });
     } catch (err) {
       console.error("Failed to delete payment", err);
       setError("Failed to delete payment.");
@@ -179,14 +160,10 @@ function App() {
 
   const handleToggleInclusion = async (credit_id: number, include: boolean) => {
     try {
-      const updatedCredit = await api.toggleCreditInclusion({
+      await api.toggleCreditInclusion({
         credit_id,
         include,
       });
-      setCredits((prev) =>
-        prev.map((c) => (c.id === credit_id ? updatedCredit : c))
-      );
-      fetchData(); // Refetch all data to update transactions
     } catch (err) {
       console.error("Failed to toggle credit inclusion", err);
       setError("Failed to toggle credit inclusion.");
@@ -201,38 +178,12 @@ function App() {
       return <div className="text-center p-8 text-red-500">{error}</div>;
     }
 
-    // Filter transactions for dashboard and reports
-    const includedTransactionIds = new Set();
-    credits.forEach((c) => {
-      if (c.includeInTotals) {
-        if (c.transaction_id) includedTransactionIds.add(c.transaction_id);
-        c.payments.forEach((p) => {
-          if (p.transaction_id) includedTransactionIds.add(p.transaction_id);
-        });
-      }
-    });
-
-    const nonCreditTransactions = transactions.filter((t) => {
-      const isCreditTransaction = credits.some(
-        (c) =>
-          c.transaction_id === t.id ||
-          c.payments.some((p) => p.transaction_id === t.id)
-      );
-      return !isCreditTransaction;
-    });
-
-    const visibleTransactions = [
-      ...nonCreditTransactions,
-      ...transactions.filter((t) => includedTransactionIds.has(t.id)),
-    ];
-
     switch (activeTab) {
       case "dashboard":
-        return <Dashboard transactions={visibleTransactions} />;
+        return <Dashboard />;
       case "income":
         return (
           <IncomeManagement
-            transactions={transactions.filter((t) => t.type === "income")}
             categories={categories.filter((c) => c.type === "income")}
             onSaveTransaction={saveTransaction}
             onDeleteTransaction={deleteTransaction}
@@ -241,7 +192,6 @@ function App() {
       case "expenses":
         return (
           <ExpenseManagement
-            transactions={transactions.filter((t) => t.type === "expense")}
             categories={categories.filter((c) => c.type === "expense")}
             onSaveTransaction={saveTransaction}
             onDeleteTransaction={deleteTransaction}
@@ -250,7 +200,6 @@ function App() {
       case "credits":
         return (
           <CreditManagement
-            credits={credits}
             onSaveCredit={saveCredit}
             onDeleteCredit={deleteCredit}
             onAddPayment={addPayment}
@@ -261,17 +210,14 @@ function App() {
       case "categories":
         return (
           <CategoryManagement
-            categories={categories}
             onAddCategory={addCategory}
             onDeleteCategory={deleteCategory}
           />
         );
       case "reports":
-        return (
-          <Reports transactions={visibleTransactions} categories={categories} />
-        );
+        return <Reports categories={categories} />;
       default:
-        return <Dashboard transactions={visibleTransactions} />;
+        return <Dashboard />;
     }
   };
 

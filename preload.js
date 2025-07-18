@@ -6,20 +6,24 @@ const { contextBridge, ipcRenderer } = require("electron");
 // to use the ipcRenderer without exposing the entire object.
 contextBridge.exposeInMainWorld("electronAPI", {
   // Categories
-  getCategories: () => ipcRenderer.invoke("get-categories"),
+  getCategories: (options) => ipcRenderer.invoke("get-categories", options),
   addCategory: (category) => ipcRenderer.invoke("add-category", category),
   deleteCategory: (id) => ipcRenderer.invoke("delete-category", id),
 
   // Transactions
-  getTransactions: () => ipcRenderer.invoke("get-transactions"),
+  getTransactions: (options) => ipcRenderer.invoke("get-transactions", options),
   addTransaction: (transaction) =>
     ipcRenderer.invoke("add-transaction", transaction),
   updateTransaction: (transaction) =>
     ipcRenderer.invoke("update-transaction", transaction),
   deleteTransaction: (id) => ipcRenderer.invoke("delete-transaction", id),
+  getFinancialSummary: (dateRange) =>
+    ipcRenderer.invoke("get-financial-summary", dateRange),
+  getRecentTransactions: (limit) =>
+    ipcRenderer.invoke("get-recent-transactions", limit),
 
   // Credits
-  getCredits: () => ipcRenderer.invoke("get-credits"),
+  getCredits: (options) => ipcRenderer.invoke("get-credits", options),
   addCredit: (credit) => ipcRenderer.invoke("add-credit", credit),
   updateCredit: (credit) => ipcRenderer.invoke("update-credit", credit),
   deleteCredit: (id) => ipcRenderer.invoke("delete-credit", id),
