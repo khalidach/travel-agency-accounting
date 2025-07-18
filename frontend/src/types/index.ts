@@ -74,6 +74,8 @@ export interface PaginationOptions {
   page?: number;
   pageSize?: number;
   type?: "income" | "expense" | "lent" | "borrowed";
+  searchTerm?: string;
+  category_id?: number;
 }
 
 export interface PaginatedResponse<T> {
@@ -84,4 +86,11 @@ export interface PaginatedResponse<T> {
     pageSize: number;
     pageCount: number;
   };
+}
+
+export interface ReportData {
+  summary: FinancialSummary;
+  incomeByCategory: { category: string; total: number }[];
+  expenseByCategory: { category: string; total: number }[];
+  transactions: Transaction[];
 }

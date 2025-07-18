@@ -21,6 +21,8 @@ contextBridge.exposeInMainWorld("electronAPI", {
     ipcRenderer.invoke("get-financial-summary", dateRange),
   getRecentTransactions: (limit) =>
     ipcRenderer.invoke("get-recent-transactions", limit),
+  getReportData: (dateRange) =>
+    ipcRenderer.invoke("get-report-data", dateRange),
 
   // Credits
   getCredits: (options) => ipcRenderer.invoke("get-credits", options),

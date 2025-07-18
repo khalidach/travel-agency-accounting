@@ -2,7 +2,7 @@
 const db = require("../db-init");
 
 const getTransactions = (options = {}) => {
-  const { page = 1, pageSize = 10, type } = options;
+  const { page = 1, pageSize = 10, type, searchTerm, category_id } = options;
   const offset = (page - 1) * pageSize;
 
   let whereClauses = [];
@@ -11,6 +11,19 @@ const getTransactions = (options = {}) => {
   if (type) {
     whereClauses.push("t.type = ?");
     params.push(type);
+  }
+
+  if (category_id) {
+    whereClauses.push("t.category_id = ?");
+    params.push(category_id);
+  }
+
+  if (searchTerm) {
+    whereClauses.push(
+      "(t.description LIKE ? OR c.name LIKE ? OR t.checkNumber LIKE ?)"
+    );
+    const searchTermLike = `%${searchTerm}%`;
+    params.push(searchTermLike, searchTermLike, searchTermLike);
   }
 
   const where =
@@ -30,6 +43,7 @@ const getTransactions = (options = {}) => {
   const countQuery = `
     SELECT COUNT(*) as count
     FROM transactions t
+    LEFT JOIN categories c ON t.category_id = c.id
     ${where}
   `;
   const total = db.prepare(countQuery).get(...params).count;
@@ -159,6 +173,56 @@ const getRecentTransactions = (limit = 5) => {
     .all(limit);
 };
 
+const getReportData = (dateRange) => {
+  const { start, end } = dateRange;
+
+  // 1. Financial Summary
+  const summary = getFinancialSummary(dateRange);
+
+  // 2. Income & Expense by Category
+  const categoryData = db
+    .prepare(
+      `
+    SELECT
+      c.name as category,
+      t.type,
+      SUM(t.amount) as total
+    FROM transactions t
+    JOIN categories c ON t.category_id = c.id
+    WHERE t.date BETWEEN ? AND ? AND t.status = 'cashed'
+    GROUP BY c.name, t.type
+  `
+    )
+    .all(start, end);
+
+  const incomeByCategory = categoryData
+    .filter((d) => d.type === "income")
+    .map(({ category, total }) => ({ category, total }));
+  const expenseByCategory = categoryData
+    .filter((d) => d.type === "expense")
+    .map(({ category, total }) => ({ category, total }));
+
+  // 3. All Transactions for CSV Export
+  const transactions = db
+    .prepare(
+      `
+    SELECT t.*, c.name as category
+    FROM transactions t
+    LEFT JOIN categories c ON t.category_id = c.id
+    WHERE t.date BETWEEN ? AND ?
+    ORDER BY t.date DESC
+  `
+    )
+    .all(start, end);
+
+  return {
+    summary,
+    incomeByCategory,
+    expenseByCategory,
+    transactions,
+  };
+};
+
 module.exports = {
   getTransactions,
   addTransaction,
@@ -166,4 +230,5 @@ module.exports = {
   deleteTransaction,
   getFinancialSummary,
   getRecentTransactions,
+  getReportData,
 };

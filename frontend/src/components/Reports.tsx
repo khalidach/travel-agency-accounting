@@ -1,9 +1,6 @@
 import React, { useState, useEffect } from "react";
-import { Transaction, Category, FinancialSummary } from "../types";
-import {
-  formatCurrency,
-  groupTransactionsByCategory,
-} from "../utils/calculations";
+import { Category, ReportData } from "../types";
+import { formatCurrency } from "../utils/calculations";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -35,34 +32,21 @@ interface ReportsProps {
 
 const Reports: React.FC<ReportsProps> = ({ categories }) => {
   const [dateRange, setDateRange] = useState({
-    start: format(startOfMonth(subMonths(new Date(), 2)), "yyyy-MM-dd"),
+    start: format(startOfMonth(new Date()), "yyyy-MM-dd"),
     end: format(endOfMonth(new Date()), "yyyy-MM-dd"),
   });
-  const [summary, setSummary] = useState<FinancialSummary | null>(null);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [reportData, setReportData] = useState<ReportData | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
-      const summaryData = await api.getFinancialSummary({
+      const data = await api.getReportData({
         start: dateRange.start,
         end: dateRange.end,
       });
-      setSummary(summaryData);
-
-      const transData = await api.getTransactions({
-        page: 1,
-        pageSize: 1000, // A large number to get all transactions for the report
-      }); // This could be further optimized
-      setTransactions(transData.data);
+      setReportData(data);
     };
     fetchData();
   }, [dateRange]);
-
-  const incomeTransactions = transactions.filter((t) => t.type === "income");
-  const expenseTransactions = transactions.filter((t) => t.type === "expense");
-
-  const incomeByCategory = groupTransactionsByCategory(incomeTransactions);
-  const expenseByCategory = groupTransactionsByCategory(expenseTransactions);
 
   const chartOptions = {
     responsive: true,
@@ -79,34 +63,37 @@ const Reports: React.FC<ReportsProps> = ({ categories }) => {
   };
 
   const incomeChartData = {
-    labels: incomeByCategory.map((item) => item.category),
+    labels: reportData?.incomeByCategory.map((item) => item.category) || [],
     datasets: [
       {
         label: "Income",
-        data: incomeByCategory.map((item) => item.total),
-        backgroundColor: incomeByCategory.map((item) => {
-          const category = categories.find((c) => c.name === item.category);
-          return category?.color || "#3B82F6";
-        }),
+        data: reportData?.incomeByCategory.map((item) => item.total) || [],
+        backgroundColor:
+          reportData?.incomeByCategory.map((item) => {
+            const category = categories.find((c) => c.name === item.category);
+            return category?.color || "#3B82F6";
+          }) || [],
       },
     ],
   };
 
   const expenseChartData = {
-    labels: expenseByCategory.map((item) => item.category),
+    labels: reportData?.expenseByCategory.map((item) => item.category) || [],
     datasets: [
       {
         label: "Expenses",
-        data: expenseByCategory.map((item) => item.total),
-        backgroundColor: expenseByCategory.map((item) => {
-          const category = categories.find((c) => c.name === item.category);
-          return category?.color || "#EF4444";
-        }),
+        data: reportData?.expenseByCategory.map((item) => item.total) || [],
+        backgroundColor:
+          reportData?.expenseByCategory.map((item) => {
+            const category = categories.find((c) => c.name === item.category);
+            return category?.color || "#EF4444";
+          }) || [],
       },
     ],
   };
 
   const exportData = () => {
+    if (!reportData) return;
     const csvContent = [
       [
         "Date",
@@ -119,7 +106,7 @@ const Reports: React.FC<ReportsProps> = ({ categories }) => {
         "Cashed Date",
         "Status",
       ],
-      ...transactions.map((t) => [
+      ...reportData.transactions.map((t) => [
         format(new Date(t.date), "yyyy-MM-dd"),
         t.type,
         t.category || "N/A",
@@ -143,9 +130,11 @@ const Reports: React.FC<ReportsProps> = ({ categories }) => {
     URL.revokeObjectURL(url);
   };
 
-  if (!summary) {
+  if (!reportData) {
     return <div>Loading...</div>;
   }
+
+  const { summary } = reportData;
 
   return (
     <div className="space-y-6">
@@ -229,7 +218,7 @@ const Reports: React.FC<ReportsProps> = ({ categories }) => {
           <h3 className="text-lg font-medium text-gray-900 mb-4">
             Income by Category
           </h3>
-          {incomeByCategory.length > 0 ? (
+          {reportData.incomeByCategory.length > 0 ? (
             <div className="h-64">
               <Doughnut data={incomeChartData} options={chartOptions} />
             </div>
@@ -244,7 +233,7 @@ const Reports: React.FC<ReportsProps> = ({ categories }) => {
           <h3 className="text-lg font-medium text-gray-900 mb-4">
             Expenses by Category
           </h3>
-          {expenseByCategory.length > 0 ? (
+          {reportData.expenseByCategory.length > 0 ? (
             <div className="h-64">
               <Doughnut data={expenseChartData} options={chartOptions} />
             </div>

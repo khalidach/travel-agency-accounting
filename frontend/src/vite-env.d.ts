@@ -4,6 +4,8 @@ interface PaginationOptions {
   page?: number;
   pageSize?: number;
   type?: "income" | "expense" | "lent" | "borrowed";
+  searchTerm?: string;
+  category_id?: number;
 }
 
 interface PaginatedResponse<T> {
@@ -36,6 +38,7 @@ interface ElectronAPI {
     end: string;
   }) => Promise<any>;
   getRecentTransactions: (limit?: number) => Promise<any[]>;
+  getReportData: (dateRange: { start: string; end: string }) => Promise<any>;
 
   // Credits
   getCredits: (options?: PaginationOptions) => Promise<PaginatedResponse<any>>;

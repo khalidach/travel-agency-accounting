@@ -15,6 +15,7 @@ const setupTransactionRoutes = () => {
     "get-recent-transactions",
     transactionController.getRecentTransactions
   );
+  ipcMain.handle("get-report-data", transactionController.getReportData);
 };
 
 module.exports = {

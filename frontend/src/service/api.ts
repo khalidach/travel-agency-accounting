@@ -5,6 +5,7 @@ import {
   PaginatedResponse,
   PaginationOptions,
   FinancialSummary,
+  ReportData,
 } from "../types";
 
 const isElectron = !!window.electronAPI;
@@ -20,6 +21,13 @@ const parseCreditDates = (credit: any): Credit => ({
     date: new Date(p.date),
     createdAt: new Date(p.createdAt),
   })),
+});
+
+const parseTransactionDates = (t: any): Transaction => ({
+  ...t,
+  date: new Date(t.date),
+  cashedDate: t.cashedDate ? new Date(t.cashedDate) : undefined,
+  createdAt: new Date(t.createdAt),
 });
 
 // --- Electron API (Offline) ---
@@ -53,39 +61,20 @@ const electronAPI = {
     const response = await window.electronAPI.getTransactions(options);
     return {
       ...response,
-      data: response.data.map((t: any) => ({
-        ...t,
-        date: new Date(t.date),
-        cashedDate: t.cashedDate ? new Date(t.cashedDate) : undefined,
-        createdAt: new Date(t.createdAt),
-      })),
+      data: response.data.map(parseTransactionDates),
     };
   },
   addTransaction: async (transactionData: any): Promise<Transaction> => {
     const newTransaction = await window.electronAPI.addTransaction(
       transactionData
     );
-    return {
-      ...newTransaction,
-      date: new Date(newTransaction.date),
-      cashedDate: newTransaction.cashedDate
-        ? new Date(newTransaction.cashedDate)
-        : undefined,
-      createdAt: new Date(newTransaction.createdAt),
-    };
+    return parseTransactionDates(newTransaction);
   },
   updateTransaction: async (transactionData: any): Promise<Transaction> => {
     const updatedTransaction = await window.electronAPI.updateTransaction(
       transactionData
     );
-    return {
-      ...updatedTransaction,
-      date: new Date(updatedTransaction.date),
-      cashedDate: updatedTransaction.cashedDate
-        ? new Date(updatedTransaction.cashedDate)
-        : undefined,
-      createdAt: new Date(updatedTransaction.createdAt),
-    };
+    return parseTransactionDates(updatedTransaction);
   },
   deleteTransaction: (id: number): Promise<void> =>
     window.electronAPI.deleteTransaction(id),
@@ -96,12 +85,17 @@ const electronAPI = {
     window.electronAPI.getFinancialSummary(dateRange),
   getRecentTransactions: async (limit?: number): Promise<Transaction[]> => {
     const transactions = await window.electronAPI.getRecentTransactions(limit);
-    return transactions.map((t: any) => ({
-      ...t,
-      date: new Date(t.date),
-      cashedDate: t.cashedDate ? new Date(t.cashedDate) : undefined,
-      createdAt: new Date(t.createdAt),
-    }));
+    return transactions.map(parseTransactionDates);
+  },
+  getReportData: async (dateRange: {
+    start: string;
+    end: string;
+  }): Promise<ReportData> => {
+    const reportData = await window.electronAPI.getReportData(dateRange);
+    return {
+      ...reportData,
+      transactions: reportData.transactions.map(parseTransactionDates),
+    };
   },
 
   // Credits

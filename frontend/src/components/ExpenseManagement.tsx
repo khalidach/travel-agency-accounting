@@ -1,10 +1,8 @@
-import React, { useState, useEffect } from "react";
-import { Transaction, Category, PaginatedResponse } from "../types";
+import React, { useState } from "react";
+import { Transaction, Category } from "../types";
 import { Plus } from "lucide-react";
 import TransactionForm from "./TransactionForm";
 import TransactionList from "./TransactionList";
-import { api } from "../service/api";
-import Pagination from "./Pagination";
 
 interface ExpenseManagementProps {
   categories: Category[];
@@ -23,22 +21,7 @@ const ExpenseManagement: React.FC<ExpenseManagementProps> = ({
   const [showForm, setShowForm] = useState(false);
   const [transactionToEdit, setTransactionToEdit] =
     useState<Transaction | null>(null);
-  const [transactions, setTransactions] =
-    useState<PaginatedResponse<Transaction> | null>(null);
-  const [page, setPage] = useState(1);
-
-  const fetchTransactions = async () => {
-    const res = await api.getTransactions({
-      page,
-      pageSize: 10,
-      type: "expense",
-    });
-    setTransactions(res);
-  };
-
-  useEffect(() => {
-    fetchTransactions();
-  }, [page]);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
 
   const handleEdit = (transaction: Transaction) => {
     setTransactionToEdit(transaction);
@@ -53,12 +36,12 @@ const ExpenseManagement: React.FC<ExpenseManagementProps> = ({
   const handleSubmit = async (transactionData: Partial<Transaction>) => {
     await onSaveTransaction(transactionData, !!transactionToEdit);
     handleCloseForm();
-    fetchTransactions();
+    setRefreshTrigger((prev) => prev + 1); // Trigger a refresh
   };
 
   const handleDelete = async (id: number) => {
     await onDeleteTransaction(id);
-    fetchTransactions();
+    setRefreshTrigger((prev) => prev + 1); // Trigger a refresh
   };
 
   return (
@@ -79,21 +62,13 @@ const ExpenseManagement: React.FC<ExpenseManagementProps> = ({
         </button>
       </div>
 
-      {transactions && (
-        <>
-          <TransactionList
-            transactions={transactions.data}
-            categories={categories}
-            onDelete={handleDelete}
-            onEdit={handleEdit}
-          />
-          <Pagination
-            currentPage={transactions.meta.page}
-            pageCount={transactions.meta.pageCount}
-            onPageChange={setPage}
-          />
-        </>
-      )}
+      <TransactionList
+        transactionType="expense"
+        categories={categories}
+        onDelete={handleDelete}
+        onEdit={handleEdit}
+        refreshTrigger={refreshTrigger}
+      />
 
       {showForm && (
         <TransactionForm

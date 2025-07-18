@@ -25,6 +25,10 @@ const getRecentTransactions = (event, limit) => {
   return transactionService.getRecentTransactions(limit);
 };
 
+const getReportData = (event, dateRange) => {
+  return transactionService.getReportData(dateRange);
+};
+
 module.exports = {
   getTransactions,
   addTransaction,
@@ -32,4 +36,5 @@ module.exports = {
   deleteTransaction,
   getFinancialSummary,
   getRecentTransactions,
+  getReportData,
 };

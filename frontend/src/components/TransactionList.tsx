@@ -1,45 +1,62 @@
-import React, { useState } from "react";
-import { Transaction, Category } from "../types";
+import React, { useState, useEffect } from "react";
+import { Transaction, Category, PaginatedResponse } from "../types";
 import { formatCurrency } from "../utils/calculations";
 import { format } from "date-fns";
 import { Search, Trash2, Edit, CheckCircle, Clock } from "lucide-react";
+import { api } from "../service/api";
+import Pagination from "./Pagination";
+import { useDebounce } from "../hooks/useDebounce";
 
 interface TransactionListProps {
-  transactions: Transaction[];
+  transactionType: "income" | "expense";
   categories: Category[];
   onDelete: (id: number) => void;
   onEdit: (transaction: Transaction) => void;
+  refreshTrigger: number;
 }
 
 const TransactionList: React.FC<TransactionListProps> = ({
-  transactions,
+  transactionType,
   categories,
   onDelete,
   onEdit,
+  refreshTrigger,
 }) => {
+  const [transactions, setTransactions] =
+    useState<PaginatedResponse<Transaction> | null>(null);
+  const [page, setPage] = useState(1);
   const [searchTerm, setSearchTerm] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">(
-    "all"
+  const [categoryFilter, setCategoryFilter] = useState<number | undefined>(
+    undefined
   );
 
-  const filteredTransactions = transactions.filter((transaction) => {
-    const matchesSearch =
-      transaction.description
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase()) ||
-      (transaction.category &&
-        transaction.category.toLowerCase().includes(searchTerm.toLowerCase()));
-    const matchesCategory =
-      categoryFilter === "" || transaction.category === categoryFilter;
-    const matchesType = typeFilter === "all" || transaction.type === typeFilter;
+  const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-    return matchesSearch && matchesCategory && matchesType;
-  });
+  const fetchTransactions = async () => {
+    const res = await api.getTransactions({
+      page,
+      pageSize: 10,
+      type: transactionType,
+      searchTerm: debouncedSearchTerm,
+      category_id: categoryFilter,
+    });
+    setTransactions(res);
+  };
 
-  const sortedTransactions = filteredTransactions.sort(
-    (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
-  );
+  useEffect(() => {
+    fetchTransactions();
+  }, [
+    page,
+    debouncedSearchTerm,
+    categoryFilter,
+    transactionType,
+    refreshTrigger,
+  ]);
+
+  const handleDelete = async (id: number) => {
+    await onDelete(id);
+    fetchTransactions();
+  };
 
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200">
@@ -58,40 +75,32 @@ const TransactionList: React.FC<TransactionListProps> = ({
 
           <div className="flex gap-2">
             <select
-              value={categoryFilter}
-              onChange={(e) => setCategoryFilter(e.target.value)}
+              value={categoryFilter || ""}
+              onChange={(e) =>
+                setCategoryFilter(
+                  e.target.value ? parseInt(e.target.value) : undefined
+                )
+              }
               className="px-3 py-2 border border-gray-300 rounded-md"
             >
               <option value="">All Categories</option>
               {categories.map((category) => (
-                <option key={category.id} value={category.name}>
+                <option key={category.id} value={category.id}>
                   {category.name}
                 </option>
               ))}
-            </select>
-
-            <select
-              value={typeFilter}
-              onChange={(e) =>
-                setTypeFilter(e.target.value as "all" | "income" | "expense")
-              }
-              className="px-3 py-2 border border-gray-300 rounded-md"
-            >
-              <option value="all">All Types</option>
-              <option value="income">Income</option>
-              <option value="expense">Expense</option>
             </select>
           </div>
         </div>
       </div>
 
       <div className="divide-y divide-gray-200">
-        {sortedTransactions.length === 0 ? (
+        {transactions && transactions.data.length === 0 ? (
           <div className="px-6 py-8 text-center text-gray-500">
             No transactions found matching your criteria.
           </div>
         ) : (
-          sortedTransactions.map((transaction) => (
+          transactions?.data.map((transaction) => (
             <div key={transaction.id} className="px-6 py-4 hover:bg-gray-50">
               <div className="flex items-center justify-between">
                 <div className="flex-1">
@@ -156,7 +165,7 @@ const TransactionList: React.FC<TransactionListProps> = ({
                     <Edit className="h-4 w-4" />
                   </button>
                   <button
-                    onClick={() => onDelete(transaction.id)}
+                    onClick={() => handleDelete(transaction.id)}
                     className="text-red-400 hover:text-red-600"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -167,6 +176,13 @@ const TransactionList: React.FC<TransactionListProps> = ({
           ))
         )}
       </div>
+      {transactions && (
+        <Pagination
+          currentPage={transactions.meta.page}
+          pageCount={transactions.meta.pageCount}
+          onPageChange={setPage}
+        />
+      )}
     </div>
   );
 };
