@@ -7,6 +7,7 @@ const getTransactions = (options = {}) => {
 
   let whereClauses = [];
   let params = [];
+  let joinFts = "";
 
   if (type) {
     whereClauses.push("t.type = ?");
@@ -18,12 +19,14 @@ const getTransactions = (options = {}) => {
     params.push(category_id);
   }
 
+  // Use FTS5 for searching if a search term is provided
   if (searchTerm) {
-    whereClauses.push(
-      "(t.description LIKE ? OR c.name LIKE ? OR t.checkNumber LIKE ?)"
-    );
-    const searchTermLike = `%${searchTerm}%`;
-    params.push(searchTermLike, searchTermLike, searchTermLike);
+    joinFts = `
+      JOIN transactions_fts fts ON t.id = fts.rowid
+    `;
+    whereClauses.push("fts.transactions_fts MATCH ?");
+    // Prepare the search term for FTS by appending a wildcard
+    params.push(`${searchTerm}*`);
   }
 
   const where =
@@ -33,6 +36,7 @@ const getTransactions = (options = {}) => {
     SELECT t.*, c.name as category
     FROM transactions t
     LEFT JOIN categories c ON t.category_id = c.id
+    ${joinFts}
     ${where}
     ORDER BY t.date DESC
     LIMIT ? OFFSET ?
@@ -40,10 +44,11 @@ const getTransactions = (options = {}) => {
 
   const transactions = db.prepare(query).all(...params, pageSize, offset);
 
+  // The COUNT query also needs to be updated to match the main query
   const countQuery = `
     SELECT COUNT(*) as count
     FROM transactions t
-    LEFT JOIN categories c ON t.category_id = c.id
+    ${joinFts}
     ${where}
   `;
   const total = db.prepare(countQuery).get(...params).count;
@@ -173,13 +178,14 @@ const getRecentTransactions = (limit = 5) => {
     .all(limit);
 };
 
+// Optimized getReportData
 const getReportData = (dateRange) => {
   const { start, end } = dateRange;
 
-  // 1. Financial Summary
+  // 1. Financial Summary (re-use existing function)
   const summary = getFinancialSummary(dateRange);
 
-  // 2. Income & Expense by Category
+  // 2. Optimized Income & Expense by Category aggregation directly in SQL
   const categoryData = db
     .prepare(
       `
@@ -191,6 +197,7 @@ const getReportData = (dateRange) => {
     JOIN categories c ON t.category_id = c.id
     WHERE t.date BETWEEN ? AND ? AND t.status = 'cashed'
     GROUP BY c.name, t.type
+    ORDER BY total DESC
   `
     )
     .all(start, end);
@@ -202,7 +209,7 @@ const getReportData = (dateRange) => {
     .filter((d) => d.type === "expense")
     .map(({ category, total }) => ({ category, total }));
 
-  // 3. All Transactions for CSV Export
+  // 3. All Transactions for CSV Export (this remains the same)
   const transactions = db
     .prepare(
       `

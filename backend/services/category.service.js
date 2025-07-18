@@ -1,7 +1,39 @@
 // backend/services/category.service.js
 const db = require("../db-init");
 
+// In-memory cache for categories
+const categoryCache = {
+  data: null,
+  timestamp: null,
+  // Cache will be valid for 5 minutes
+  ttl: 5 * 60 * 1000,
+};
+
 const getCategories = (options = {}) => {
+  const { page = 1, pageSize = 10, type } = options;
+  const offset = (page - 1) * pageSize;
+
+  // For paginated or filtered requests, bypass the cache and go to the DB
+  if (page > 1 || pageSize !== 10 || type) {
+    return getCategoriesFromDb(options);
+  }
+
+  // Check if cache is valid
+  const now = Date.now();
+  if (categoryCache.data && now - categoryCache.timestamp < categoryCache.ttl) {
+    console.log("Returning categories from cache.");
+    return categoryCache.data;
+  }
+
+  console.log("Fetching categories from DB and caching.");
+  const freshData = getCategoriesFromDb(options);
+  categoryCache.data = freshData;
+  categoryCache.timestamp = now;
+  return freshData;
+};
+
+// Helper function to fetch categories directly from the database
+const getCategoriesFromDb = (options = {}) => {
   const { page = 1, pageSize = 10, type } = options;
   const offset = (page - 1) * pageSize;
 
@@ -43,6 +75,10 @@ const addCategory = (category) => {
       "INSERT INTO categories (name, type, color) VALUES (?, ?, ?)"
     );
     const result = stmt.run(category.name, category.type, category.color);
+
+    // Invalidate cache on add
+    categoryCache.data = null;
+
     return db
       .prepare("SELECT * FROM categories WHERE id = ?")
       .get(result.lastInsertRowid);
@@ -63,6 +99,10 @@ const deleteCategory = (id) => {
     db.prepare("DELETE FROM categories WHERE id = ?").run(catId);
   });
   transaction(id);
+
+  // Invalidate cache on delete
+  categoryCache.data = null;
+
   return { success: true };
 };
 

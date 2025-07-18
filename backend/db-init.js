@@ -98,6 +98,47 @@ db.exec(`
   );
 `);
 
+// --- Full-Text Search (FTS5) Setup for Transactions ---
+// Create a virtual table for FTS5
+db.exec(`
+  CREATE VIRTUAL TABLE IF NOT EXISTS transactions_fts USING fts5(
+    description,
+    checkNumber,
+    content='transactions',
+    content_rowid='id'
+  );
+`);
+
+// Triggers to keep the FTS table in sync with the transactions table
+db.exec(`
+  CREATE TRIGGER IF NOT EXISTS transactions_after_insert
+  AFTER INSERT ON transactions
+  BEGIN
+    INSERT INTO transactions_fts(rowid, description, checkNumber)
+    VALUES (new.id, new.description, new.checkNumber);
+  END;
+`);
+
+db.exec(`
+  CREATE TRIGGER IF NOT EXISTS transactions_after_delete
+  AFTER DELETE ON transactions
+  BEGIN
+    INSERT INTO transactions_fts(transactions_fts, rowid, description, checkNumber)
+    VALUES ('delete', old.id, old.description, old.checkNumber);
+  END;
+`);
+
+db.exec(`
+  CREATE TRIGGER IF NOT EXISTS transactions_after_update
+  AFTER UPDATE ON transactions
+  BEGIN
+    INSERT INTO transactions_fts(transactions_fts, rowid, description, checkNumber)
+    VALUES ('delete', old.id, old.description, old.checkNumber);
+    INSERT INTO transactions_fts(rowid, description, checkNumber)
+    VALUES (new.id, new.description, new.checkNumber);
+  END;
+`);
+
 console.log("Database tables checked/created.");
 
 module.exports = db;
